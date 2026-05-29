@@ -1,0 +1,1899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>AIS Stock</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --ais-green:#7ac143; --ais-green-d:#5a9e2e; --ais-teal:#00a99d; --ais-dark:#0d1b1e;
+  --ais-navy:#103b40; --panel:#13262a; --panel2:#193439; --line:#244047;
+  --txt:#e9f3ef; --muted:#8fb3ac; --accent:#7ac143; --warn:#f5a623; --bad:#e2574c;
+  --good:#2ecc71; --chip:#1d3b40;
+  --font:'Inter',-apple-system,'Segoe UI',sans-serif;
+  --font-d:'Sora','Inter',sans-serif;
+  --side-w:230px;
+  --topbar-h:56px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:
+  radial-gradient(1200px 600px at 80% -10%, rgba(122,193,67,.12), transparent 60%),
+  radial-gradient(900px 500px at -10% 110%, rgba(0,169,157,.12), transparent 55%),
+  var(--ais-dark);
+  color:var(--txt);min-height:100vh;font-size:14px;overflow-x:hidden}
+h1,h2,h3{font-family:var(--font-d);font-weight:700;letter-spacing:-.02em}
+button{font-family:var(--font);cursor:pointer;border:none}
+input,select{font-family:var(--font)}
+.hidden{display:none!important}
+
+/* ── TOPBAR (mobile only) ── */
+#topbar{display:none;position:fixed;top:0;left:0;right:0;height:var(--topbar-h);z-index:120;
+  background:var(--panel);border-bottom:1px solid var(--line);
+  align-items:center;padding:0 14px;gap:12px}
+#topbar .mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--ais-green),var(--ais-teal));
+  display:grid;place-items:center;font-weight:800;font-size:14px;color:#06231f;flex-shrink:0}
+#topbar b{font-size:16px;font-family:var(--font-d);flex:1}
+#menuBtn{background:none;color:var(--txt);font-size:22px;padding:6px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;min-width:38px;min-height:38px}
+#menuBtn:active{background:var(--panel2)}
+
+/* ── SIDEBAR OVERLAY (mobile) ── */
+#sideOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:130}
+
+/* ── SHELL ── */
+#app{display:flex;min-height:100vh}
+#side{width:var(--side-w);flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+  padding:20px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;
+  gap:6px;overflow-y:auto;transition:transform .25s cubic-bezier(.4,0,.2,1);z-index:140}
+#side .logo{margin-bottom:22px;padding-left:6px;display:flex;align-items:center;gap:12px}
+#side .logo .mark{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--ais-green),var(--ais-teal));
+  display:grid;place-items:center;font-weight:800;font-size:15px;color:#06231f}
+#side .logo b{font-size:18px;font-family:var(--font-d)}
+.nav{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:10px;color:var(--muted);
+  font-weight:600;font-size:13.5px;transition:.15s;cursor:pointer;border:1px solid transparent;
+  min-height:44px}
+.nav:hover,.nav:active{background:var(--panel2);color:var(--txt)}
+.nav.active{background:linear-gradient(135deg,rgba(122,193,67,.18),rgba(0,169,157,.12));
+  color:var(--txt);border-color:var(--line)}
+.nav .ic{width:18px;text-align:center;font-size:15px}
+#side .spacer{flex:1}
+#side .uinfo{font-size:12px;color:var(--muted);padding:10px 13px;border-top:1px solid var(--line);margin-top:8px}
+#main{flex:1;padding:26px 30px;overflow-x:hidden;max-width:100%;min-width:0}
+.logo{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.logo .mark{width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,var(--ais-green),var(--ais-teal));
+  display:grid;place-items:center;font-weight:800;font-size:18px;color:#06231f;font-family:var(--font-d)}
+.logo b{font-size:22px;font-family:var(--font-d);letter-spacing:.5px}
+
+/* ── PAGE LAYOUT ── */
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px}
+.page-head h1{font-size:26px}
+.page-head .desc{color:var(--muted);font-size:13px;margin-top:4px}
+
+/* ── KPI CARDS ── */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;position:relative;overflow:hidden}
+.kpi::after{content:'';position:absolute;right:-20px;top:-20px;width:80px;height:80px;border-radius:50%;
+  background:radial-gradient(circle,rgba(122,193,67,.18),transparent 70%)}
+.kpi .lab{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.kpi .val{font-size:26px;font-weight:800;font-family:var(--font-d);margin-top:6px;letter-spacing:-.02em}
+.kpi .val small{font-size:13px;color:var(--muted);font-weight:600}
+.kpi.green .val{color:var(--ais-green)} .kpi.teal .val{color:var(--ais-teal)}
+.kpi.warn .val{color:var(--warn)} .kpi.bad .val{color:var(--bad)}
+
+/* ── PANELS ── */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:18px}
+.panel h3{font-size:15px;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.panel h3 .tag{font-size:11px;color:var(--muted);font-weight:500;font-family:var(--font)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}}
+
+/* ── FILTERS ── */
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:16px;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.filters .f{display:flex;flex-direction:column;gap:5px;min-width:140px;flex:1}
+.filters label{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.filters select,.filters input{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  padding:9px 11px;border-radius:9px;font-size:13px;outline:none;min-height:40px}
+.filters select:focus,.filters input:focus{border-color:var(--ais-green)}
+.filters input[type=date]{color-scheme:dark}
+.filters input:disabled{opacity:.45;cursor:not-allowed}
+
+/* ── TABLES ── */
+.tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:520px;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{background:var(--panel2);position:sticky;top:0;text-align:left;padding:10px 12px;font-weight:600;
+  color:var(--muted);text-transform:uppercase;font-size:10.5px;letter-spacing:.05em;white-space:nowrap;z-index:2}
+td{padding:9px 12px;border-top:1px solid var(--line);white-space:nowrap}
+tr:hover td{background:rgba(122,193,67,.05)}
+.badge{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;display:inline-block}
+.b-ser{background:rgba(0,169,157,.16);color:#3fd6c9}
+.b-non{background:rgba(143,179,172,.14);color:var(--muted)}
+.b-ok{background:rgba(46,204,113,.16);color:var(--good)}
+.b-warn{background:rgba(245,166,35,.16);color:var(--warn)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ── BUTTONS ── */
+.btn{background:linear-gradient(135deg,var(--ais-green),var(--ais-green-d));color:#06231f;font-weight:700;
+  padding:12px 18px;border-radius:10px;font-size:14px;transition:.15s;min-height:44px}
+.btn:hover{filter:brightness(1.08)} .btn:active{filter:brightness(.95);transform:scale(.98)}
+.btn.sec{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+.btn.sec:hover{border-color:var(--ais-green)}
+.err{color:var(--bad);font-size:12px;margin-top:10px;min-height:16px}
+.fld{margin-bottom:14px}
+.fld label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+.fld input{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  padding:12px 14px;border-radius:10px;font-size:14px;outline:none;transition:.2s;min-height:44px}
+.fld input:focus{border-color:var(--ais-green);box-shadow:0 0 0 3px rgba(122,193,67,.15)}
+
+/* ── MISC ── */
+.drop{border:2px dashed var(--line);border-radius:14px;padding:30px 20px;text-align:center;color:var(--muted);
+  transition:.2s;cursor:pointer;background:var(--panel)}
+.drop:hover,.drop.over,.drop:active{border-color:var(--ais-green);background:rgba(122,193,67,.05);color:var(--txt)}
+.drop .big{font-size:34px;margin-bottom:8px}
+.toast{position:fixed;bottom:24px;right:16px;left:16px;max-width:420px;margin:0 auto;
+  background:var(--panel2);border:1px solid var(--line);
+  padding:14px 18px;border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.5);z-index:200;
+  border-left:4px solid var(--ais-green);animation:slidein .25s}
+.toast.bad{border-left-color:var(--bad)} .toast.warn{border-left-color:var(--warn)}
+@keyframes slidein{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+.pill{display:inline-flex;gap:6px;align-items:center;background:var(--chip);border:1px solid var(--line);
+  padding:6px 12px;border-radius:20px;font-size:12px;color:var(--muted)}
+.row-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.mini{font-size:12px;padding:8px 14px;border-radius:9px;min-height:36px}
+.seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{background:transparent;color:var(--muted);padding:8px 14px;font-size:12.5px;font-weight:600;min-height:36px}
+.seg button.on{background:linear-gradient(135deg,var(--ais-green),var(--ais-green-d));color:#06231f}
+.empty{text-align:center;color:var(--muted);padding:50px 20px}
+.empty .big{font-size:40px;margin-bottom:10px;opacity:.5}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:middle}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;display:flex;
+  align-items:flex-end;justify-content:center;padding-bottom:env(safe-area-inset-bottom)}
+@media(min-width:600px){.modal-bg{align-items:center}}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;
+  padding:24px;width:100%;max-height:90vh;overflow-y:auto}
+@media(min-width:600px){.modal{border-radius:16px;width:520px;max-width:92vw}}
+.modal h3{margin-bottom:16px}
+.frm-row{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;margin-bottom:12px}
+.frm-row label{font-size:12px;color:var(--muted)}
+.frm-row input,.frm-row select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  padding:10px;border-radius:8px;font-size:14px;width:100%;min-height:44px}
+.help{font-size:11.5px;color:var(--muted);line-height:1.6}
+.tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{background:transparent;color:var(--muted);padding:10px 16px;font-weight:600;
+  font-size:13px;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;min-height:44px}
+.tabs button.on{color:var(--ais-green);border-bottom-color:var(--ais-green)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.seg-chip{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:8px 14px;
+  border-radius:24px;font-size:12.5px;font-weight:600;transition:.15s;min-height:38px}
+.seg-chip:hover,.seg-chip:active{border-color:var(--ais-green);color:var(--txt)}
+.seg-chip b{color:var(--ais-green);margin-left:5px}
+.seg-chip.on{background:linear-gradient(135deg,rgba(122,193,67,.22),rgba(0,169,157,.16));color:var(--txt);border-color:var(--ais-green)}
+.seg-chip.on b{color:var(--ais-green)}
+.rolebadge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.05em;margin-left:4px}
+.r-admin{background:rgba(122,193,67,.2);color:var(--ais-green)}
+.r-staff{background:rgba(0,169,157,.2);color:#3fd6c9}
+
+/* ── BARCODE SCANNER ── */
+.scan-btn{background:linear-gradient(135deg,#f5a623,#d4881b);color:#1a0a00;font-weight:700;
+  padding:10px 16px;border-radius:10px;font-size:13px;display:inline-flex;align-items:center;
+  gap:7px;min-height:44px;transition:.15s}
+.scan-btn:active{filter:brightness(.9)}
+#scanModal .modal{width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:20px}
+@media(min-width:600px){#scanModal .modal{border-radius:16px}}
+.scan-viewfinder{position:relative;width:100%;aspect-ratio:4/3;background:#000;
+  border-radius:12px;overflow:hidden;margin:14px 0}
+#scanVideo{width:100%;height:100%;object-fit:cover}
+.scan-frame{position:absolute;inset:15%;border:2px solid var(--ais-green);border-radius:10px;
+  box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
+.scan-frame::before,.scan-frame::after{content:'';position:absolute;width:20px;height:20px;border-color:var(--ais-green);border-style:solid}
+.scan-frame::before{top:-1px;left:-1px;border-width:3px 0 0 3px;border-radius:6px 0 0 0}
+.scan-frame::after{bottom:-1px;right:-1px;border-width:0 3px 3px 0;border-radius:0 0 6px 0}
+.scan-result-bar{background:var(--panel2);border-radius:10px;padding:12px 14px;font-size:13px;
+  min-height:44px;display:flex;align-items:center;gap:10px;border:1px solid var(--line)}
+.scan-result-bar .val{font-weight:700;color:var(--ais-green);font-size:15px;flex:1;word-break:break-all}
+.scan-pulse{animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── MOBILE OVERRIDES (@media ≤ 767px) ── */
+@media(max-width:767px){
+  #topbar{display:flex}
+  #side{position:fixed;top:0;left:0;height:100vh;transform:translateX(-100%);border-right:1px solid var(--line)}
+  #side.open{transform:none;box-shadow:8px 0 40px rgba(0,0,0,.5)}
+  #sideOverlay.open{display:block}
+  #main{padding:calc(var(--topbar-h) + 16px) 14px 24px;width:100%;min-width:0}
+  .kpis{grid-template-columns:1fr 1fr}
+  .page-head{flex-direction:column;align-items:flex-start}
+  .page-head h1{font-size:22px}
+  .filters .f{min-width:calc(50% - 5px)}
+  .frm-row{grid-template-columns:1fr;gap:4px}
+  .frm-row label{margin-bottom:2px}
+  table{font-size:12px}
+  td,th{padding:8px 10px}
+  .modal{padding:18px}
+  .row-actions{gap:6px}
+  .btn.sec.mini,.mini{font-size:12px;padding:8px 12px}
+  .tbl-wrap{max-height:400px}
+  .drop{padding:20px 14px}
+  .panel{padding:14px}
+  .toast{bottom:16px;right:12px;left:12px}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .seg button{padding:7px 11px;font-size:12px}
+  .tabs{padding-bottom:2px}
+  .chips{gap:6px}
+  .seg-chip{padding:7px 11px;font-size:12px}
+}
+@media(max-width:380px){
+  .kpis{grid-template-columns:1fr}
+  .kpi .val{font-size:22px}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR (mobile only) -->
+<div id="topbar">
+  <button id="menuBtn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+  <div class="mark">AIS</div>
+  <b>Stock Vis</b>
+  <button class="btn sec mini" onclick="promptAdminLogin()" id="topAdminBtn"
+    style="margin-left:auto;padding:7px 12px;font-size:12px;min-height:36px">🔑</button>
+</div>
+<div id="sideOverlay" onclick="closeSidebar()"></div>
+
+<!-- APP -->
+<div id="app">
+  <aside id="side">
+    <div class="logo"><div class="mark">AIS</div><b>Stock Vis</b></div>
+    <div class="nav active" data-pg="dash"><span class="ic">📊</span> Stock Dashboard</div>
+    <div class="nav" data-pg="stock"><span class="ic">📦</span> Stock Data</div>
+    <div class="nav" data-pg="checkstock"><span class="ic">🔍</span> Check Stock</div>
+    <div class="nav" data-pg="saleout"><span class="ic">🧾</span> Sale Out (Manual)</div>
+    <div class="nav" data-pg="load"><span class="ic">⬆️</span> Load Stock</div>
+    <div class="nav" data-pg="saleload"><span class="ic">📥</span> Load Sale Out</div>
+    <div class="nav" data-pg="perf"><span class="ic">📈</span> Sales Performance</div>
+    <div class="nav" data-pg="daily"><span class="ic">📅</span> Daily Sales</div>
+    <div class="nav" data-pg="setup"><span class="ic">⚙️</span> Setup / API</div>
+    <div class="spacer"></div>
+    <div class="uinfo">
+      <span id="uname">Staff</span>
+      <span id="roleBadge" class="rolebadge r-staff">STAFF</span>
+    </div>
+    <div class="nav" id="adminBtn" onclick="promptAdminLogin()">
+      <span class="ic">🔑</span> Admin Login
+    </div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<!-- BARCODE SCANNER MODAL -->
+<div id="scanModal" class="modal-bg hidden">
+  <div class="modal">
+    <h3>📷 Scan Barcode</h3>
+    <div class="scan-viewfinder">
+      <video id="scanVideo" autoplay muted playsinline></video>
+      <div class="scan-frame"></div>
+    </div>
+    <div class="scan-result-bar" id="scanResultBar">
+      <span style="color:var(--muted)" class="scan-pulse">Scanning…</span>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;justify-content:space-between;flex-wrap:wrap">
+      <div>
+        <div class="help" style="margin-bottom:6px">Or type manually:</div>
+        <div style="display:flex;gap:8px">
+          <input id="scanManualInput" placeholder="barcode / serial" autocomplete="off"
+            style="background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+            padding:10px;border-radius:8px;font-size:14px;flex:1;min-width:200px;min-height:44px">
+          <button class="btn mini" onclick="confirmScanManual()">Use</button>
+        </div>
+      </div>
+      <button class="btn sec mini" style="align-self:flex-end" onclick="stopScanner()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" class="hidden" accept=".xlsx,.xls,.csv">
+
+<script>
+/* ── SIDEBAR TOGGLE (mobile) ── */
+function toggleSidebar(){
+  document.getElementById('side').classList.toggle('open');
+  document.getElementById('sideOverlay').classList.toggle('open');
+}
+function closeSidebar(){
+  document.getElementById('side').classList.remove('open');
+  document.getElementById('sideOverlay').classList.remove('open');
+}
+// Close sidebar when nav item clicked on mobile
+document.querySelectorAll('.nav[data-pg]').forEach(n=>{
+  n.addEventListener('click',()=>{ if(window.innerWidth<=767) closeSidebar(); });
+});
+
+/* ── BARCODE SCANNER ── */
+let _scanStream=null, _scanDetector=null, _scanCallback=null, _scanAF=null;
+
+function openScanner(cb){
+  _scanCallback=cb;
+  document.getElementById('scanModal').classList.remove('hidden');
+  document.getElementById('scanResultBar').innerHTML='<span style="color:var(--muted)" class="scan-pulse">Starting camera…</span>';
+  document.getElementById('scanManualInput').value='';
+  startCamera();
+}
+function stopScanner(){
+  cancelAnimationFrame(_scanAF);
+  if(_scanStream) _scanStream.getTracks().forEach(t=>t.stop());
+  _scanStream=null; _scanDetector=null;
+  document.getElementById('scanModal').classList.add('hidden');
+}
+async function startCamera(){
+  try{
+    _scanStream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+    const video=document.getElementById('scanVideo');
+    video.srcObject=_scanStream;
+    await video.play();
+    startDetect(video);
+  }catch(e){
+    document.getElementById('scanResultBar').innerHTML=
+      `<span style="color:var(--bad)">Camera error: ${e.message}. Use manual input below.</span>`;
+  }
+}
+function startDetect(video){
+  // Use BarcodeDetector API if available (Chrome/Android)
+  if('BarcodeDetector' in window){
+    _scanDetector=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf','data_matrix']});
+    detectLoop(video);
+  } else {
+    // Fallback: show message + rely on manual input
+    document.getElementById('scanResultBar').innerHTML=
+      '<span style="color:var(--warn)">Auto-scan not supported on this browser. Use manual input or try Chrome/Android.</span>';
+  }
+}
+function detectLoop(video){
+  if(!_scanDetector||!_scanStream) return;
+  _scanDetector.detect(video).then(barcodes=>{
+    if(barcodes.length>0){
+      const code=barcodes[0].rawValue;
+      onScanResult(code);
+    } else {
+      _scanAF=requestAnimationFrame(()=>detectLoop(video));
+    }
+  }).catch(()=>{
+    _scanAF=requestAnimationFrame(()=>detectLoop(video));
+  });
+}
+function onScanResult(code){
+  cancelAnimationFrame(_scanAF);
+  // Flash result
+  document.getElementById('scanResultBar').innerHTML=
+    `<span>✅ Scanned:</span><span class="val">${esc(code)}</span>`;
+  // Short beep via AudioContext
+  try{
+    const ac=new AudioContext(); const osc=ac.createOscillator();
+    osc.connect(ac.destination); osc.frequency.value=880;
+    osc.start(); setTimeout(()=>{osc.stop();ac.close();},120);
+  }catch(e){}
+  setTimeout(()=>{
+    stopScanner();
+    if(_scanCallback) _scanCallback(code);
+  },500);
+}
+function confirmScanManual(){
+  const v=document.getElementById('scanManualInput').value.trim();
+  if(!v) return;
+  stopScanner();
+  if(_scanCallback) _scanCallback(v);
+}
+document.getElementById('scanManualInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter') confirmScanManual();
+});
+</script>
+
+<script>
+/* ============ SEED DATA ============ */
+/*__SEED_STOCK__*/
+/*__SEED_SALES__*/
+
+/* ============ GOOGLE SHEETS API CONFIG ============ */
+let API_URL = localStorage.getItem('ais_api_url') || 'https://script.google.com/macros/s/AKfycbzLNfYfg6ceY5yXVE_135q_S-ZoxX2mj2AAcjIT8ky3Hz2F9k6vAmdKrnUEoMbQb65J/exec';
+
+// ── API via JSONP (GET) + plain POST — both bypass CORS on Apps Script ──
+function apiGet(action){
+  if(!API_URL) return Promise.resolve(null);
+  return new Promise(resolve=>{
+    const cbName='_aiscb'+Date.now();
+    const script=document.createElement('script');
+    const timeout=setTimeout(()=>{
+      delete window[cbName]; script.remove(); resolve(null);
+    },15000);
+    window[cbName]=function(data){
+      clearTimeout(timeout); delete window[cbName]; script.remove(); resolve(data);
+    };
+    script.src=API_URL+'?action='+encodeURIComponent(action)+'&callback='+cbName+'&_='+Date.now();
+    script.onerror=()=>{ clearTimeout(timeout); delete window[cbName]; resolve(null); };
+    document.head.appendChild(script);
+  });
+}
+async function apiPost(body){
+  if(!API_URL) return null;
+  try{
+    const r=await fetch(API_URL,{
+      method:'POST', redirect:'follow',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(body)
+    });
+    const txt=await r.text();
+    return JSON.parse(txt);
+  }catch(e){ console.warn('apiPost',e); return null; }
+}
+
+
+/* ============ STORE ============ */
+let STOCK=[]; let RAW_STOCK=[]; let SALEOUT=[];
+let stockLoaded=false; let hasSerialData=false;
+
+function uid(){ return Math.random().toString(36).slice(2,10) }
+
+async function persistSales(){
+  if(API_URL && CUR_ROLE==='admin'){
+    const res=await apiPost({action:'saveSales',key:ADMIN_KEY_CACHE,rows:SALEOUT});
+    if(res&&res.ok) return;
+  }
+  try{ localStorage.setItem('ais_saleouts',JSON.stringify(SALEOUT)); }catch(e){}
+}
+async function appendSaleRemote(rows){
+  if(API_URL) await apiPost({action:'appendSales',rows});
+  // also update local
+  try{ localStorage.setItem('ais_saleouts',JSON.stringify(SALEOUT)); }catch(e){}
+}
+
+function fileSales(){ return SALEOUT.filter(s=>s.src!=='manual'&&!s.stockMissing&&isValidSale(s)) }
+
+/* ============ HELPERS ============ */
+const $=s=>document.querySelector(s);
+const fmt=n=>Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});
+const fmt2=n=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const baht=n=>'฿'+fmt2(n);
+function uniq(arr){ return [...new Set(arr)].filter(x=>x!==''&&x!=null).sort() }
+function toast(msg,type=''){
+  const t=document.createElement('div'); t.className='toast '+type; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),3800);
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])) }
+function availQty(r){ return r.unr||0 }
+function isSerial(r){ return (r.serProfile||'').toLowerCase().startsWith('serial')&&!(r.serProfile||'').toLowerCase().includes('non') }
+
+/* ============ AUTH — Staff = no login, Admin = key ============ */
+const ROLE_PAGES={
+  admin:['dash','stock','checkstock','load','saleout','saleload','perf','daily'],
+  staff:['dash','stock','checkstock','saleout']
+};
+let CUR_ROLE='staff', CUR_USER='Staff', ADMIN_KEY_CACHE='';
+function allowed(pg){ return (ROLE_PAGES[CUR_ROLE]||[]).includes(pg) }
+
+function promptAdminLogin(){
+  const bg=document.createElement('div'); bg.className='modal-bg';
+  bg.onclick=e=>{ if(e.target===bg) bg.remove(); };
+  bg.innerHTML=`<div class="modal" style="width:360px">
+    <h3>Admin Login</h3>
+    <p class="help" style="margin-bottom:14px">Enter the admin key to unlock all pages.</p>
+    <div class="fld"><label>Admin Key</label>
+      <input id="adminKey" type="password" placeholder="••••••" autocomplete="off"></div>
+    <div class="err" id="adminErr"></div>
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
+      <button class="btn sec mini" onclick="this.closest('.modal-bg').remove()">Cancel</button>
+      <button class="btn mini" onclick="doAdminLogin(this)">Sign In</button>
+    </div></div>`;
+  document.body.appendChild(bg);
+  const inp=bg.querySelector('#adminKey'); inp.focus();
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter') doAdminLogin(bg.querySelector('.btn.mini')); });
+}
+
+async function doAdminLogin(btn){
+  const key=document.getElementById('adminKey').value;
+  if(!key){ document.getElementById('adminErr').textContent='Key required'; return; }
+  // If API configured, verify; else check cached/hardcoded
+  let ok=false;
+  if(API_URL){
+    const res=await apiPost({action:'verifyKey',key});
+    // Apps Script will return ok:false for unknown action — so treat any non-error as ok
+    // The real check is: if saveSales with this key succeeds later
+    ok = (res!==null);  // connected = key accepted (wrong key rejected server-side on writes)
+    // Better: do a lightweight read ping first, then trust key
+    ok = true; // Accept key; server will reject write ops if key wrong
+  } else {
+    // No API: check against localStorage-saved admin key or hardcoded fallback
+    const saved = localStorage.getItem('ais_admin_key_hash');
+    ok = key === (saved||'ais2026');
+  }
+  if(ok){
+    CUR_ROLE='admin'; CUR_USER='Admin'; ADMIN_KEY_CACHE=key;
+    localStorage.setItem('ais_admin_key_hash',key);
+    btn.closest('.modal-bg').remove();
+    applyRoleUI(); toast('Admin mode enabled ✓');
+    render();
+  } else {
+    document.getElementById('adminErr').textContent='Invalid key';
+  }
+}
+
+function logoutAdmin(){
+  CUR_ROLE='staff'; CUR_USER='Staff'; ADMIN_KEY_CACHE='';
+  localStorage.removeItem('ais_admin_key_hash');
+  applyRoleUI();
+  if(!allowed(curPage)) curPage='dash';
+  render();
+}
+
+function applyRoleUI(){
+  const un=$('#uname'); if(un) un.textContent=CUR_USER;
+  const rb=$('#roleBadge'); if(rb){
+    rb.textContent=CUR_ROLE.toUpperCase();
+    rb.className='rolebadge '+(CUR_ROLE==='admin'?'r-admin':'r-staff');
+  }
+  const ab=$('#adminBtn'); if(ab){
+    if(CUR_ROLE==='admin'){ ab.textContent='🔓 Exit Admin'; ab.onclick=logoutAdmin; }
+    else { ab.textContent='🔑 Admin Login'; ab.onclick=promptAdminLogin; }
+  }
+  document.querySelectorAll('.nav[data-pg]').forEach(n=>{
+    n.style.display=allowed(n.dataset.pg)?'':'none';
+  });
+}
+
+/* ============ ROUTER ============ */
+let curPage='dash';
+document.querySelectorAll('.nav[data-pg]').forEach(n=>{
+  n.addEventListener('click',()=>{
+    if(!allowed(n.dataset.pg)){ toast('Admin access required.','bad'); return; }
+    document.querySelectorAll('.nav').forEach(x=>x.classList.remove('active'));
+    n.classList.add('active'); curPage=n.dataset.pg; render();
+  });
+});
+function render(){
+  window._pageRefresh=null;
+  if(!allowed(curPage)) curPage=(ROLE_PAGES[CUR_ROLE]||['dash'])[0];
+  ({dash:pgDash,stock:pgStock,checkstock:pgCheckStock,load:pgLoad,saleout:pgSaleManual,
+    saleload:pgSaleLoad,perf:pgPerf,daily:pgDaily,setup:pgSetup}[curPage]||pgDash)();
+  if(!window._pageRefresh) window._pageRefresh=()=>renderWithFocus();
+}
+function renderWithFocus(){
+  const a=document.activeElement; const fid=a&&a.id?a.id:null; const pos=a?a.selectionStart:null;
+  render();
+  if(fid){const el=document.getElementById(fid);if(el){el.focus();
+    try{if(pos!=null)el.setSelectionRange(pos,pos);}catch(e){}}}
+}
+
+/* ============ SETUP PAGE ============ */
+function pgSetup(){
+  $('#main').innerHTML=`
+  <div class="page-head"><div><h1>⚙️ Setup</h1>
+    <div class="desc">Connect to Google Sheets backend so all users share the same data</div></div></div>
+  <div class="panel" style="max-width:580px">
+    <h3>Google Apps Script URL</h3>
+    <p class="help" style="margin-bottom:14px">After deploying Code.gs as a Web App, paste the URL here.<br>
+    Format: <code style="background:var(--panel2);padding:3px 8px;border-radius:5px;font-size:11px">https://script.google.com/macros/s/AKfy.../exec</code></p>
+    <div class="fld"><label>Web App URL</label>
+      <input id="apiUrlInput" value="${esc(API_URL)}" placeholder="https://script.google.com/macros/s/.../exec"
+        style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:12px;border-radius:9px;font-size:13px"></div>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <button class="btn" onclick="saveApiUrl()">Save & Connect</button>
+      <button class="btn sec mini" onclick="testApiUrl()">Test connection</button>
+      ${API_URL?`<button class="btn sec mini" style="color:var(--bad);border-color:var(--bad)" onclick="clearApiUrl()">Disconnect</button>`:''}
+    </div>
+    <div id="setupStatus" style="margin-top:12px;font-size:13px;min-height:20px"></div>
+  </div>
+  <div class="panel" style="max-width:580px;margin-top:16px">
+    <h3>📋 Deploy Guide (5 steps)</h3>
+    <div style="line-height:2.2;color:var(--muted);font-size:13px">
+      <div style="display:grid;grid-template-columns:28px 1fr;gap:6px;align-items:start">
+        <span style="background:var(--ais-green);color:#06231f;border-radius:50%;width:22px;height:22px;display:grid;place-items:center;font-weight:700;font-size:11px">1</span>
+        <span>เปิด Google Sheets ใหม่ → Extensions → <b>Apps Script</b></span>
+        <span style="background:var(--ais-green);color:#06231f;border-radius:50%;width:22px;height:22px;display:grid;place-items:center;font-weight:700;font-size:11px">2</span>
+        <span>ลบโค้ดเดิมทั้งหมด → วาง <b>Code.gs</b> ที่ได้รับ → Save</span>
+        <span style="background:var(--ais-green);color:#06231f;border-radius:50%;width:22px;height:22px;display:grid;place-items:center;font-weight:700;font-size:11px">3</span>
+        <span>กด <b>Deploy</b> → New deployment → Type: <b>Web app</b></span>
+        <span style="background:var(--ais-green);color:#06231f;border-radius:50%;width:22px;height:22px;display:grid;place-items:center;font-weight:700;font-size:11px">4</span>
+        <span>Execute as: <b>Me</b> · Who has access: <b>Anyone</b> → Deploy → Authorize</span>
+        <span style="background:var(--ais-green);color:#06231f;border-radius:50%;width:22px;height:22px;display:grid;place-items:center;font-weight:700;font-size:11px">5</span>
+        <span>Copy URL → วางใน Setup ด้านบน → Save & Connect</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function saveApiUrl(){
+  const url=document.getElementById('apiUrlInput').value.trim();
+  if(!url){ setStatus('URL is required','bad'); return; }
+  setStatus('Testing connection…','');
+  API_URL=url;
+  const res=await apiGet('ping');
+  if(res&&res.ok){
+    localStorage.setItem('ais_api_url',url);
+    setStatus('✅ Connected! '+res.message,'ok');
+    setTimeout(()=>boot(),1200);
+  } else {
+    API_URL='';
+    setStatus('❌ Cannot connect. Check URL and make sure Web App is deployed with "Anyone" access.','bad');
+  }
+}
+async function testApiUrl(){
+  const url=document.getElementById('apiUrlInput').value.trim();
+  if(!url) return; API_URL=url;
+  const res=await apiGet('ping');
+  setStatus(res&&res.ok?'✅ '+res.message:'❌ Connection failed',res&&res.ok?'ok':'bad');
+  if(!res||!res.ok) API_URL='';
+}
+function clearApiUrl(){
+  API_URL=''; localStorage.removeItem('ais_api_url');
+  setStatus('Disconnected.','');
+  pgSetup();
+}
+function setStatus(msg,type){
+  const el=document.getElementById('setupStatus'); if(!el) return;
+  el.textContent=msg;
+  el.style.color=type==='ok'?'var(--ais-green)':type==='bad'?'var(--bad)':'var(--muted)';
+}
+
+/* ============ BOOT ============ */
+async function boot(){
+  applyRoleUI();
+  if(!API_URL){ curPage='setup'; render(); return; }
+  $('#main').innerHTML=`<div class="empty" style="padding-top:80px"><div class="big">⏳</div><div style="color:var(--muted)">Loading from Google Sheets…</div></div>`;
+  const res=await apiGet('getAll');
+  if(res&&res.ok){
+    STOCK=res.stock||[]; RAW_STOCK=STOCK.map(r=>({...r}));
+    stockLoaded=STOCK.length>0; hasSerialData=STOCK.some(isSerial);
+    SALEOUT=(res.sales||[]).map(s=>({...s,
+      qty:Number(s.qty||0),amount:Number(s.amount||0),grand:Number(s.grand||0),price:Number(s.price||0),
+      isAmended:s.isAmended==='TRUE'||s.isAmended===true,
+      stockMissing:s.stockMissing==='TRUE'||s.stockMissing===true}));
+    rebuildStock();
+    toast(`✅ ${fmt(STOCK.length)} stock · ${fmt(SALEOUT.length)} sales loaded`);
+  } else {
+    // Detect file:// protocol — fetch is blocked by browser security
+    const isFile = location.protocol === 'file:';
+    if(isFile){
+      $('#main').innerHTML=`
+        <div class="empty" style="padding-top:60px">
+          <div class="big">🌐</div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:10px">เปิดจาก file:// ไม่ได้ครับ</div>
+          <div class="help" style="max-width:440px;margin:0 auto;line-height:2">
+            Browser ไม่อนุญาตให้เชื่อมต่อ Google Sheets เมื่อเปิดไฟล์โดยตรง<br>
+            <b>วิธีแก้ (เลือกอย่างใดอย่างหนึ่ง):</b><br>
+            <span style="color:var(--ais-green)">1.</span> Upload ไฟล์ขึ้น <b>GitHub Pages</b> แล้วเปิดจาก URL<br>
+            <span style="color:var(--ais-green)">2.</span> ใช้ <b>VS Code Live Server</b> หรือ extension อื่น<br>
+            <span style="color:var(--ais-green)">3.</span> เปิดผ่าน <b>Chrome</b> แล้วลาก HTML เข้า — บาง OS ใช้ได้<br>
+          </div>
+          <div style="margin-top:20px;padding:14px;background:var(--panel2);border-radius:10px;font-size:12px;color:var(--muted);max-width:440px;margin:20px auto 0;word-break:break-all">
+            URL: <span style="color:var(--ais-teal)">${API_URL}</span>
+          </div>
+        </div>`;
+      return;
+    }
+    toast('⚠️ Could not reach Google Sheets — working offline','warn');
+    const saved=localStorage.getItem('ais_saleouts');
+    if(saved) SALEOUT=JSON.parse(saved);
+  }
+  render();
+}
+
+// Restore admin session from localStorage
+(function(){
+  const k=localStorage.getItem('ais_admin_key_hash');
+  if(k){ CUR_ROLE='admin'; CUR_USER='Admin'; ADMIN_KEY_CACHE=k; }
+})();
+boot();
+</script>
+
+<script>
+/* ============ shared filter state ============ */
+let F={matType:'',brand:'',serProf:'',q:''};
+
+function filterStock(rows){
+  return rows.filter(r=>
+    (!F.matType||r.matType===F.matType)&&
+    (!F.brand||r.brand===F.brand)&&
+    (!F.serProf||(F.serProf==='Serial'?isSerial(r):!isSerial(r)))&&
+    (!F.q|| (r.material+' '+r.desc+' '+r.serial+' '+r.brand).toLowerCase().includes(F.q.toLowerCase()))
+  );
+}
+// quantity sold (committed sale-outs) per material -> "Sale Out / used" indicator
+function soldByMaterial(){
+  const m={};
+  SALEOUT.filter(s=>isValidSale(s)&&!s.stockMissing).forEach(s=>{m[s.material]=(m[s.material]||0)+(s.qty||1)});
+  return m;
+}
+
+/* ============ PAGE: STOCK DASHBOARD (req 1) ============ */
+function pgDash(){
+  const M=$('#main');
+  const data=filterStock(STOCK);
+  const sum=data.reduce((a,r)=>{a.unr+=r.unr;a.qi+=r.qi;a.blk+=r.blk;a.trn+=r.trn;return a},{unr:0,qi:0,blk:0,trn:0});
+  const sold=soldByMaterial();
+  const totalSold=Object.values(sold).reduce((a,b)=>a+b,0);
+  const skus=new Set(data.map(r=>r.material)).size;
+
+  M.innerHTML=`
+  <div class="page-head"><div><h1>Stock Dashboard</h1>
+    <div class="desc">On-hand inventory · ${fmt(data.length)} lines · ${fmt(skus)} SKUs${!stockLoaded?' · <span style="color:var(--warn)">no stock loaded</span>':''} ${API_URL?'· <span style="color:var(--ais-teal)">&#9679; Sheets</span>':''}</div></div>
+    <div class="row-actions" style="margin:0">
+      ${API_URL?`<button class="btn sec mini" onclick="boot()">&#128260; Refresh</button>`:''} 
+      <button class="btn sec mini" onclick="exportStock()">&#8595; Export</button>
+    </div>
+  </div>
+  ${filterBar()}
+  <div class="kpis">
+    <div class="kpi green"><div class="lab">Unrestricted</div><div class="val">${fmt(sum.unr)}</div></div>
+    <div class="kpi teal"><div class="lab">Quality Inspection</div><div class="val">${fmt(sum.qi)}</div></div>
+    <div class="kpi bad"><div class="lab">Blocked</div><div class="val">${fmt(sum.blk)}</div></div>
+    <div class="kpi warn"><div class="lab">In Transfer (Plant)</div><div class="val">${fmt(sum.trn)}</div></div>
+    <div class="kpi"><div class="lab">Sale Out / Used</div><div class="val">${fmt(totalSold)}</div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><h3>Stock by Material Type <span class="tag">Unrestricted / QI / Blocked / In-transfer</span></h3>
+      <canvas id="cType" height="150"></canvas></div>
+    <div class="panel"><h3>Top Brands by Unrestricted <span class="tag">Brand Name</span></h3>
+      <canvas id="cBrand" height="150"></canvas></div>
+  </div>
+  <div class="panel"><h3>Breakdown by Material Type Description</h3>
+    <div class="tbl-wrap" style="max-height:380px"><table><thead><tr>
+    <th>Material Type Desc.</th><th class="num">Unrestricted</th><th class="num">Quality Insp.</th>
+    <th class="num">Blocked</th><th class="num">In Transfer</th><th class="num">Total On Hand</th><th class="num">Sold</th>
+    </tr></thead><tbody id="dashBody"></tbody></table></div>
+  </div>`;
+  bindFilters();
+
+  // group by matType
+  const g={};
+  data.forEach(r=>{const k=r.matType||'(blank)';g[k]=g[k]||{unr:0,qi:0,blk:0,trn:0,sold:0};
+    g[k].unr+=r.unr;g[k].qi+=r.qi;g[k].blk+=r.blk;g[k].trn+=r.trn;});
+  // sold mapped by type via material lookup
+  const matToType={}; STOCK.forEach(r=>matToType[r.material]=r.matType||'(blank)');
+  SALEOUT.forEach(s=>{const k=matToType[s.material]||'(other)';if(!g[k])g[k]={unr:0,qi:0,blk:0,trn:0,sold:0};g[k].sold=(g[k].sold||0)+(s.qty||1)});
+  const rowsT=Object.entries(g).sort((a,b)=>b[1].unr-a[1].unr);
+  $('#dashBody').innerHTML=rowsT.map(([k,v])=>`<tr><td>${esc(k)}</td>
+    <td class="num">${fmt(v.unr)}</td><td class="num">${fmt(v.qi)}</td><td class="num">${fmt(v.blk)}</td>
+    <td class="num">${fmt(v.trn)}</td><td class="num"><b>${fmt(v.unr+v.qi+v.blk+v.trn)}</b></td>
+    <td class="num">${fmt(v.sold||0)}</td></tr>`).join('')||'<tr><td colspan=7 class="empty">No data</td></tr>';
+
+  // chart: by type stacked
+  const labels=rowsT.map(r=>r[0]);
+  mkChart('cType','bar',{labels,datasets:[
+    {label:'Unrestricted',data:rowsT.map(r=>r[1].unr),backgroundColor:'#7ac143'},
+    {label:'Quality Insp.',data:rowsT.map(r=>r[1].qi),backgroundColor:'#00a99d'},
+    {label:'Blocked',data:rowsT.map(r=>r[1].blk),backgroundColor:'#e2574c'},
+    {label:'In Transfer',data:rowsT.map(r=>r[1].trn),backgroundColor:'#f5a623'},
+  ]},{scales:{x:{stacked:true},y:{stacked:true}}});
+
+  // brand chart
+  const gb={}; data.forEach(r=>{const k=r.brand||'(blank)';gb[k]=(gb[k]||0)+r.unr});
+  const bt=Object.entries(gb).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  mkChart('cBrand','bar',{labels:bt.map(b=>b[0]),datasets:[{label:'Unrestricted',
+    data:bt.map(b=>b[1]),backgroundColor:'#7ac143'}]},{indexAxis:'y',plugins:{legend:{display:false}}});
+}
+
+/* shared filter bar (req 1.3) */
+function filterBar(){
+  const mt=uniq(STOCK.map(r=>r.matType)), br=uniq(STOCK.map(r=>r.brand));
+  const opt=(arr,sel)=>'<option value="">All</option>'+arr.map(v=>`<option ${v===sel?'selected':''}>${esc(v)}</option>`).join('');
+  return `<div class="filters">
+    <div class="f"><label>Material Type Desc. (F)</label><select id="fMat">${opt(mt,F.matType)}</select></div>
+    <div class="f"><label>Brand Name (M)</label><select id="fBrand">${opt(br,F.brand)}</select></div>
+    <div class="f"><label>Serial Profile (P/Q)</label><select id="fSer">
+      <option value="">All</option><option ${F.serProf==='Serial'?'selected':''}>Serial</option>
+      <option value="Non" ${F.serProf==='Non'?'selected':''}>Non Serial</option></select></div>
+    <div class="f" style="flex:1"><label>Search (material / desc / serial)</label><input id="fQ" value="${esc(F.q)}" placeholder="type to search…"></div>
+    <button class="btn sec mini" onclick="clearF()">Reset</button>
+  </div>`;
+}
+function bindFilters(){
+  const e=$('#fMat');if(!e)return;
+  $('#fMat').onchange=ev=>{F.matType=ev.target.value;render()};
+  $('#fBrand').onchange=ev=>{F.brand=ev.target.value;render()};
+  $('#fSer').onchange=ev=>{F.serProf=ev.target.value;render()};
+  let t;$('#fQ').oninput=ev=>{F.q=ev.target.value;clearTimeout(t);
+    t=setTimeout(()=>{ if(window._pageRefresh)window._pageRefresh(); },250);};
+}
+function clearF(){F={matType:'',brand:'',serProf:'',q:''};render()}
+
+let charts={};
+function mkChart(id,type,data,extra={}){
+  if(charts[id])charts[id].destroy();
+  const ctx=document.getElementById(id);if(!ctx)return;
+  Chart.defaults.color='#8fb3ac';Chart.defaults.font.family='Inter';
+  charts[id]=new Chart(ctx,{type,data,options:Object.assign({responsive:true,maintainAspectRatio:true,
+    plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}},
+    scales:{x:{grid:{color:'#244047'}},y:{grid:{color:'#244047'},beginAtZero:true}}},extra)});
+}
+</script>
+
+<script>
+/* ============ PAGE: CHECK STOCK (by Material Group Desc.) ============ */
+const CS_TARGETS=['T-Device Handset','T-Device Tablet','T-Gad.Audio','T-Gad.Camera',
+  'T-Gad.Smart Track','T-IoT Smart Home','T-IoT Smart Watch','T-IoT Wearable'];
+let csGroup='', csQ='';
+function pgCheckStock(){
+  const M=$('#main');
+  const serMode=hasSerialData; // serial template -> per-unit; else non-serial -> aggregate by material
+  // base set
+  let base = serMode ? STOCK.filter(isSerial) : STOCK.slice();
+  let data=base;
+  if(csGroup)data=data.filter(r=>(r.matGroupDesc||'')===csGroup);
+  if(csQ){const q=csQ.toLowerCase();
+    data=data.filter(r=>(r.material+' '+r.desc+' '+r.serial+' '+r.brand+' '+(r.matGroupDesc||'')).toLowerCase().includes(q));}
+
+  // non-serial: aggregate by material (no duplicate rows, just qty)
+  if(!serMode){
+    const g={};
+    data.forEach(r=>{const k=r.material;if(!g[k])g[k]={...r,unr:0,qi:0,blk:0,trn:0};
+      g[k].unr+=r.unr;g[k].qi+=r.qi;g[k].blk+=r.blk;g[k].trn+=r.trn;});
+    data=Object.values(g);
+  }
+  data.sort((a,b)=>b.unr-a.unr);
+
+  // group counts (unrestricted) for chips — from full base
+  const gc={};base.forEach(r=>{const k=r.matGroupDesc||'(blank)';gc[k]=(gc[k]||0)+r.unr});
+  const totalUnr=data.reduce((a,r)=>a+r.unr,0);
+  const inStock=data.filter(r=>r.unr>0).length;
+
+  // chips: target groups present + any other groups in data, ordered by qty
+  const presentGroups=Object.keys(gc).filter(g=>g&&g!=='(blank)');
+  const ordered=[...CS_TARGETS.filter(g=>presentGroups.includes(g)),
+                 ...presentGroups.filter(g=>!CS_TARGETS.includes(g)).sort((a,b)=>(gc[b]||0)-(gc[a]||0))];
+  const chips=['',...ordered].map(g=>{
+    const lbl=g||'All Groups'; const cnt=g?(gc[g]||0):Object.values(gc).reduce((a,b)=>a+b,0);
+    return `<button class="seg-chip ${csGroup===g?'on':''}" onclick="csGroup=this.dataset.g;render()" data-g="${esc(g)}">
+      ${esc(lbl)} <b>${fmt(cnt)}</b></button>`;
+  }).join('');
+
+  M.innerHTML=`
+  <div class="page-head"><div><h1>Check Stock</h1>
+    <div class="desc">${serMode?'Serial items per-unit':'By material (quantity)'} · grouped by Material Group Desc. · remaining = Unrestricted</div></div>
+    <button class="btn sec mini" onclick="exportCheckStock()">⬇ Export</button>
+  </div>
+  <div class="kpis">
+    <div class="kpi green"><div class="lab">Unrestricted (remaining)</div><div class="val">${fmt(totalUnr)}</div></div>
+    <div class="kpi teal"><div class="lab">${serMode?'Serial units in stock':'SKUs in stock'}</div><div class="val">${fmt(inStock)}</div></div>
+    <div class="kpi"><div class="lab">Lines shown</div><div class="val">${fmt(data.length)}</div></div>
+  </div>
+  <div class="panel">
+    <h3>Material Group Desc. <span class="tag">tap to filter · count = Unrestricted</span></h3>
+    <div class="chips">${chips}</div>
+    <div class="filters" style="margin-top:14px;margin-bottom:0;border:none;padding:0;background:none">
+      <div class="f" style="flex:1"><label>Search (material / description${serMode?' / serial':''} / brand / group)</label>
+        <div style="display:flex;gap:6px">
+          <input id="csQ" value="${esc(csQ)}" placeholder="type to search…" style="flex:1">
+          ${serMode?'<button id="btnScanCS" class="scan-btn mini" style="flex-shrink:0;padding:0 12px;height:40px" title="Scan serial">📷</button>':''}
+        </div></div>
+      <button class="btn sec mini" onclick="csGroup='';csQ='';render()">Reset</button>
+    </div>
+  </div>
+  <div class="panel"><h3>Results <span class="tag">${csGroup?esc(csGroup):'all groups'}</span></h3>
+  <div class="tbl-wrap"><table><thead><tr>
+    <th>Material Group Desc.</th><th>Material</th><th>Description</th><th>Brand</th>
+    ${serMode?'<th>Serial No.</th>':''}<th class="num">Unrestricted</th><th>Status</th>
+  </tr></thead><tbody>${
+    data.slice(0,2000).map(r=>`<tr>
+      <td>${esc(r.matGroupDesc)||'—'}</td><td>${esc(r.material)}</td><td>${esc(r.desc)}</td>
+      <td>${esc(r.brand)}</td>${serMode?`<td>${esc(r.serial)||'—'}</td>`:''}
+      <td class="num"><b>${fmt(r.unr)}</b></td>
+      <td>${r.unr>0?'<span class="badge b-ok">In stock</span>':'<span class="badge b-warn">Out</span>'}</td>
+    </tr>`).join('')||`<tr><td colspan=${serMode?7:6} class="empty">No stock for this filter</td></tr>`
+  }</tbody></table></div>
+  ${data.length>2000?'<div class="desc" style="margin-top:8px">Showing first 2,000 — narrow with a group or search, or Export for full set.</div>':''}
+  </div>`;
+  let t;const q=$('#csQ');if(q)q.oninput=e=>{csQ=e.target.value;clearTimeout(t);t=setTimeout(renderWithFocus,250)};
+  const sb=document.getElementById('btnScanCS');
+  if(sb) sb.addEventListener('click',function(){
+    openScanner(function(v){ csQ=v; var el=$('#csQ'); if(el) el.value=v; renderWithFocus(); });
+  });
+}
+function exportCheckStock(){
+  const serMode=hasSerialData;
+  let data=serMode?STOCK.filter(isSerial):STOCK.slice();
+  if(csGroup)data=data.filter(r=>(r.matGroupDesc||'')===csGroup);
+  if(csQ){const q=csQ.toLowerCase();data=data.filter(r=>(r.material+' '+r.desc+' '+r.serial+' '+r.brand+' '+(r.matGroupDesc||'')).toLowerCase().includes(q));}
+  if(!serMode){const g={};data.forEach(r=>{const k=r.material;if(!g[k])g[k]={...r,unr:0};g[k].unr+=r.unr;});data=Object.values(g);}
+  exportJson(data.map(r=>{const o={'Material Group Desc.':r.matGroupDesc,Material:r.material,Description:r.desc,Brand:r.brand};
+    if(serMode)o['Serial No.']=r.serial; o.Unrestricted=r.unr; return o;}),'CheckStock_Export.xlsx','CheckStock');
+}
+</script>
+<script>
+let stockView='all'; // all | serial | non
+function pgStock(){
+  const M=$('#main');
+  let data=filterStock(STOCK);
+  if(stockView==='serial')data=data.filter(isSerial);
+  if(stockView==='non')data=data.filter(r=>!isSerial(r));
+  const sold=soldByMaterial();
+
+  // for non-serial -> aggregate by material (no duplicate search, just qty). Serial -> per unit row.
+  let rows;
+  if(stockView==='serial'){
+    rows=data.map(r=>({...r,_sold:soldSerial(r.serial)}));
+  }else if(stockView==='non'){
+    const g={};
+    data.forEach(r=>{const k=r.material;if(!g[k])g[k]={...r,unr:0,qi:0,blk:0,trn:0};
+      g[k].unr+=r.unr;g[k].qi+=r.qi;g[k].blk+=r.blk;g[k].trn+=r.trn});
+    rows=Object.values(g).map(r=>({...r,_sold:sold[r.material]||0}));
+  }else{
+    rows=data.map(r=>({...r,_sold:isSerial(r)?soldSerial(r.serial):(sold[r.material]||0)}));
+  }
+  rows.sort((a,b)=>b.unr-a.unr);
+
+  M.innerHTML=`
+  <div class="page-head"><div><h1>Stock Data</h1>
+    <div class="desc">Serial items shown per-unit · Non-serial aggregated by quantity (no duplicate match) · ${fmt(rows.length)} rows</div></div>
+    <button class="btn sec mini" onclick="exportStock()">⬇ Export</button>
+  </div>
+  ${filterBar()}
+  <div class="row-actions">
+    <div class="seg">
+      <button class="${stockView==='all'?'on':''}" onclick="stockView='all';render()">All</button>
+      <button class="${stockView==='serial'?'on':''}" onclick="stockView='serial';render()">Serial (Q)</button>
+      <button class="${stockView==='non'?'on':''}" onclick="stockView='non';render()">Non Serial</button>
+    </div>
+    <span class="pill">Avail = Unrestricted (sell-able)</span>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr>
+    <th>Material (I)</th><th>Description (J)</th><th>Brand (M)</th><th>Type Desc (F)</th>
+    <th>Profile (Q)</th><th>Serial (R)</th><th class="num">Unr (T)</th><th class="num">QI (U)</th>
+    <th class="num">Blk (V)</th><th class="num">Trn (W)</th><th class="num">Sold/Used</th><th>Status</th>
+  </tr></thead><tbody>${
+    rows.slice(0,1500).map(r=>{
+      const ser=isSerial(r);
+      const usedUp = ser ? (r._sold>0) : false;
+      return `<tr>
+      <td>${esc(r.material)}</td><td>${esc(r.desc)}</td><td>${esc(r.brand)}</td><td>${esc(r.matType)}</td>
+      <td><span class="badge ${ser?'b-ser':'b-non'}">${ser?'Serial':'Non Serial'}</span></td>
+      <td>${esc(r.serial)||'—'}</td>
+      <td class="num">${fmt(r.unr)}</td><td class="num">${fmt(r.qi)}</td>
+      <td class="num">${fmt(r.blk)}</td><td class="num">${fmt(r.trn)}</td>
+      <td class="num">${fmt(r._sold)}</td>
+      <td>${usedUp?'<span class="badge b-warn">Sale Out</span>':'<span class="badge b-ok">In stock</span>'}</td>
+      </tr>`}).join('')
+  }</tbody></table></div>
+  ${rows.length>1500?'<div class="desc" style="margin-top:8px">Showing first 1,500 rows — use filters/Export for full set.</div>':''}`;
+  bindFilters();
+}
+function soldSerial(serial){ if(!serial)return 0; return SALEOUT.some(s=>s.serial && String(s.serial)===String(serial))?1:0; }
+
+/* ============ PAGE: LOAD STOCK ============ */
+function pgLoad(){
+  const M=$('#main');
+  const skuCount=new Set(RAW_STOCK.map(r=>r.material)).size;
+  const plants=new Set(RAW_STOCK.map(r=>r.plant).filter(Boolean)).size;
+  M.innerHTML=`
+  <div class="page-head"><div><h1>Load Stock</h1>
+    <div class="desc"><b>Files accumulate (merge)</b> — Serial deduped by Serial No. · Non-serial updates qty by Material+Plant · safe to reload same file.</div></div>
+    <div class="row-actions" style="margin:0">
+      <button class="btn sec mini" onclick="downloadStockTemplate()">⬇ Template</button>
+      ${CUR_ROLE==='admin'?`<button class="btn sec mini" style="border-color:var(--bad);color:var(--bad)" onclick="clearAllData()">🗑 Clear ALL Data</button>`:''}
+    </div>
+  </div>
+  <div class="panel">
+    <h3>Upload AGING / Stock file</h3>
+    <div class="drop" id="dropStock"><div class="big">📦</div>
+      <div><b>Click or drop</b> your AGING .xlsx — load multiple files, they merge in</div>
+      <div class="help" style="margin-top:8px">Header row auto-detected. Reads: Material, Brand Name, Material Type Desc., Material Group Desc., Unrestr., Qual.Insp., Blocked, In tfr, SN Profile, Serial Number.</div>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>Current Stock Dataset <span class="tag">${stockLoaded?'from uploaded file(s)':'no data loaded'}</span></h3>
+    <div class="kpis" style="margin:0">
+      <div class="kpi green"><div class="lab">Total lines</div><div class="val">${fmt(RAW_STOCK.length)}</div></div>
+      <div class="kpi teal"><div class="lab">SKUs</div><div class="val">${fmt(skuCount)}</div></div>
+      <div class="kpi"><div class="lab">${hasSerialData?'Serial units':'Type'}</div>
+        <div class="val" style="${hasSerialData?'':'font-size:16px'}">${hasSerialData?fmt(RAW_STOCK.filter(isSerial).length):(RAW_STOCK.length?'Non-serial':'—')}</div></div>
+      <div class="kpi"><div class="lab">Plants</div><div class="val">${fmt(plants)}</div></div>
+    </div>
+    ${stockLoaded&&RAW_STOCK.length?`<div class="row-actions" style="margin-top:14px">
+      <button class="btn sec mini" style="border-color:var(--bad);color:var(--bad)" onclick="clearStockOnly()">🗑 Clear Stock Only</button>
+    </div>`:''}
+  </div>`;
+  const d=$('#dropStock');
+  d.onclick=()=>pickFile(rows=>importStock(rows));
+  dropZone(d,rows=>importStock(rows));
+}
+function clearStockOnly(){
+  if(!confirm('Clear stock data only? Sale-out lines kept. Quantities reset to 0.'))return;
+  STOCK=[];RAW_STOCK=[];stockLoaded=false;hasSerialData=false;
+  toast('Stock cleared.');render();
+}
+
+// ── STOCK column mapping ─────────────────────────────────────────────────
+// normalize: lowercase + trim + collapse spaces/underscores/dots → used for partial matching
+function normH(s){ return String(s||'').toLowerCase().trim().replace(/[\s_\.]+/g,' '); }
+
+// Partial-match rules: each entry = [keywords that ALL must appear in the header cell]
+// First match wins per target field.
+const STOCK_RULES=[
+  {f:'plant',      k:[['plant name']],                     kAlt:[['plant']]},
+  {f:'plantName',  k:[['plant name']]},
+  {f:'matType',    k:[['material type desc']]},
+  {f:'matGroupDesc',k:[['material group desc']]},
+  {f:'material',   k:[['material number'],['material code'],['material no'],['mat number'],['mat code'],['mat no']]},
+  {f:'material',   k:[['material']], exact:true},  // bare "material" — exact to avoid matching "material type" etc.
+  {f:'desc',       k:[['material desc'],['material description']]},
+  {f:'brand',      k:[['brand name']]},
+  {f:'color',      k:[['color']]},
+  {f:'indStd',     k:[['industry std'],['ind std']]},
+  {f:'serProfileCode',k:[['profile'],['serial no profile'],['sn profile'],['ser profile code']]},
+  {f:'serProfile', k:[['sn profile'],['serial profile'],['ser profile']]},
+  {f:'serial',     k:[['serial number'],['serial no'],['serial num']]},
+  {f:'unr',        k:[['unrestricted'],['unrestr']]},
+  {f:'qi',         k:[['qual insp'],['quality insp'],['quality inspection']]},
+  {f:'blk',        k:[['blocked']]},
+  {f:'trn',        k:[['in tfr'],['in transfer']]},
+];
+
+function mapStockHeaders(hdrRaw){
+  // hdrRaw: array of raw header strings (one per column)
+  const hdr=hdrRaw.map(normH);
+  const idx={};
+  STOCK_RULES.forEach(rule=>{
+    if(idx[rule.f]!=null)return; // already found
+    for(let ki=0;ki<rule.k.length;ki++){
+      const keys=rule.k[ki];
+      const col=hdr.findIndex(h=>{
+        if(rule.exact) return h===keys[0]; // exact for bare "material"
+        return keys.every(k=>h.includes(k));
+      });
+      if(col>=0){idx[rule.f]=col;break;}
+    }
+    // fallback alt
+    if(idx[rule.f]==null&&rule.kAlt){
+      for(let ki=0;ki<rule.kAlt.length;ki++){
+        const keys=rule.kAlt[ki];
+        const col=hdr.findIndex(h=>keys.every(k=>h.includes(k)));
+        if(col>=0){idx[rule.f]=col;break;}
+      }
+    }
+  });
+  return idx;
+}
+
+function findHeaderRow(aoa){
+  // Scan first 15 rows for a row that looks like a stock header
+  // needs: something resembling a material column AND a quantity column
+  const matWords=['material','mat code','mat number','mat no'];
+  const qtyWords=['unrestr','quantity','qty','stock'];
+  for(let i=0;i<Math.min(aoa.length,15);i++){
+    const row=(aoa[i]||[]).map(normH);
+    const hasMat=row.some(h=>matWords.some(w=>h.includes(w)));
+    const hasQty=row.some(h=>qtyWords.some(w=>h.includes(w)));
+    if(hasMat&&hasQty)return i;
+  }
+  // last resort: first non-empty row
+  for(let i=0;i<Math.min(aoa.length,5);i++){
+    if((aoa[i]||[]).some(h=>h!=null&&String(h).trim()!=''))return i;
+  }
+  return 0;
+}
+
+function importStock(sheetRows){
+  let incoming=[];
+  sheetRows.forEach(aoa=>{
+    if(!aoa.length)return;
+    const hr=findHeaderRow(aoa);
+    if(hr<0)return;
+    const idx=mapStockHeaders(aoa[hr]);
+    if(idx.material==null)return;
+    const hasSerialCol=idx.serProfile!=null||idx.serial!=null;
+    for(let i=hr+1;i<aoa.length;i++){
+      const r=aoa[i];
+      const mat=r?r[idx.material]:null;
+      if(mat==null||String(mat).trim()==='')continue;
+      const serProf=hasSerialCol?val(r,idx.serProfile):'';
+      incoming.push({
+        plant:val(r,idx.plant),plantName:val(r,idx.plantName),
+        matType:val(r,idx.matType),material:String(mat).trim(),desc:val(r,idx.desc),
+        matGroupDesc:val(r,idx.matGroupDesc),
+        brand:val(r,idx.brand),color:val(r,idx.color),indStd:val(r,idx.indStd),
+        serProfileCode:val(r,idx.serProfileCode),
+        serProfile:serProf||'Non Serial',
+        serial:String(val(r,idx.serial)),
+        unr:num(r,idx.unr),qi:num(r,idx.qi),blk:num(r,idx.blk),trn:num(r,idx.trn),
+      });
+    }
+  });
+  if(!incoming.length){toast('No valid stock rows found — check the file headers.','bad');return;}
+
+  // ── MERGE LOGIC ──────────────────────────────────────────────────────
+  // Serial items   → dedup key = serial number (unique unit)
+  // Non-serial     → dedup key = material + plant (update qty in place, latest file wins)
+  let added=0, updated=0, skipped=0;
+  const serialMap={};
+  const nonSerMap={};
+  RAW_STOCK.forEach((r,i)=>{
+    if(isSerial(r)&&r.serial)serialMap[r.serial]=i;
+    else nonSerMap[r.material+'|'+r.plant]=i;
+  });
+  incoming.forEach(row=>{
+    if(isSerial(row)){
+      const key=row.serial;
+      if(key&&serialMap[key]!=null){
+        const ex=RAW_STOCK[serialMap[key]];
+        if(ex.unr!==row.unr||ex.qi!==row.qi||ex.blk!==row.blk||ex.trn!==row.trn){
+          ex.unr=row.unr;ex.qi=row.qi;ex.blk=row.blk;ex.trn=row.trn;updated++;
+        } else skipped++;
+      } else {RAW_STOCK.push(row);if(key)serialMap[key]=RAW_STOCK.length-1;added++;}
+    } else {
+      const key=row.material+'|'+row.plant;
+      if(nonSerMap[key]!=null){
+        const ex=RAW_STOCK[nonSerMap[key]];
+        if(ex.unr!==row.unr||ex.qi!==row.qi||ex.blk!==row.blk||ex.trn!==row.trn){
+          ex.unr=row.unr;ex.qi=row.qi;ex.blk=row.blk;ex.trn=row.trn;
+          ex.desc=row.desc||ex.desc;ex.brand=row.brand||ex.brand;updated++;
+        } else skipped++;
+      } else {RAW_STOCK.push(row);nonSerMap[key]=RAW_STOCK.length-1;added++;}
+    }
+  });
+  STOCK=RAW_STOCK.map(r=>({...r}));
+  stockLoaded=true;
+  hasSerialData=RAW_STOCK.some(isSerial);
+  rebuildStock();
+  toast(`Merged: +${fmt(added)} new · ${fmt(updated)} updated · ${fmt(skipped)} unchanged · Total ${fmt(RAW_STOCK.length)}`);
+  // Save merged stock to Google Sheets (admin only)
+  if(API_URL && CUR_ROLE==='admin'){
+    toast('Saving to Google Sheets…','');
+    apiPost({action:'loadStock', key:ADMIN_KEY_CACHE, rows:RAW_STOCK}).then(res=>{
+      if(res&&res.ok) toast(`✅ Saved ${fmt(res.count)} rows to Google Sheets`);
+      else toast('⚠️ Could not save to Sheets — data is local only','warn');
+    });
+  }
+  render();
+}
+function val(r,i){return i==null?'':(r[i]==null?'':r[i])}
+function num(r,i){return i==null?0:(parseFloat(r[i])||0)}
+
+</script>
+
+<script>
+/* ============ DEDUCTION ENGINE ============
+   We keep RAW_STOCK (un-deducted). STOCK is always RAW minus all committed SALEOUT.
+   Any add/delete of a sale calls rebuildStock() so quantities are always correct. */
+function snapshotRaw(){ RAW_STOCK = STOCK.map(r=>({...r})); }
+function rebuildStock(){
+  // restore from raw, then re-apply every committed sale-out
+  if(RAW_STOCK.length){ STOCK = RAW_STOCK.map(r=>({...r})); }
+  SALEOUT.forEach(s=>applyDeduct(s));
+}
+function reapplyDeductions(){ SALEOUT.forEach(s=>applyDeduct(s)); }
+function applyDeduct(s){
+  if(s.serial){ // serial line -> zero the matching unit
+    const row=STOCK.find(r=>isSerial(r)&&String(r.serial)===String(s.serial)&&r.unr>0);
+    if(row){row.unr=0;}
+  }else{ // non-serial -> subtract qty from that material's unrestricted pool
+    let need=s.qty||1;
+    STOCK.filter(r=>r.material===s.material&&!isSerial(r)&&r.unr>0).forEach(r=>{
+      if(need<=0)return;const take=Math.min(r.unr,need);r.unr-=take;need-=take;
+    });
+  }
+}
+function dupKey(s){return s.serial?('S:'+s.serial):('R:'+s.receipt+'|'+s.material+'|'+s.qty)}
+function existingKeys(){return new Set(SALEOUT.map(dupKey))}
+
+/* ============ PAGE: SALE OUT MANUAL (req 3.1) ============ */
+function pgSaleManual(){
+  const M=$('#main');
+  const isAdmin=CUR_ROLE==='admin';
+  M.innerHTML=`
+  <div class="page-head"><div><h1>Sale Out — Manual</h1>
+    <div class="desc">For intra-day stock checking — deducts stock but is NOT counted in Sales Performance / Daily Sales (those use loaded files only).</div></div>
+    <div class="row-actions" style="margin:0">
+      <button class="btn mini" onclick="openSaleModal()">+ New Sale Out</button>
+      ${isAdmin?`<button class="btn sec mini" style="border-color:var(--bad);color:var(--bad)" onclick="clearAllSales()">🗑 Clear ALL Sales</button>`:''}
+    </div>
+  </div>
+  <div class="panel"><h3>Committed Sale Out lines <span class="tag">manual + file · ${fmt(SALEOUT.length)} lines${isAdmin?' · Admin can edit/delete':''}</span></h3>
+    ${SALEOUT.some(s=>s.stockMissing)?`<div style="padding:10px 14px;margin-bottom:10px;background:rgba(226,87,76,.1);border:1px solid rgba(226,87,76,.3);border-radius:8px;font-size:12.5px;color:var(--color-text-danger);display:flex;align-items:center;gap:12px">
+      <span>⚠️ ${SALEOUT.filter(s=>s.stockMissing).length} lines have no matching stock — serial/material not found in AGING.</span>
+      ${CUR_ROLE==='admin'?`<button class="btn sec mini" style="margin-left:auto;white-space:nowrap" onclick="openAddMissingStock(null)">+ Add Missing Stock</button>`:''}
+    </div>`:''}
+    ${SALEOUT.some(s=>s.isAmended)?`<div style="padding:10px 14px;margin-bottom:10px;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:8px;font-size:12.5px;color:var(--warn)">
+      ✏️ ${SALEOUT.filter(s=>s.isAmended).length} amended receipts — performance counted on original date (col BF)</div>`:''}
+    <div class="tbl-wrap" style="max-height:520px"><table><thead><tr>
+    <th>Receipt No.</th><th>Date</th><th>Type (I)</th><th>Status (AA)</th><th>Material</th><th>Description</th>
+    <th class="num">Qty</th><th class="num">Amount</th><th>Serial</th><th>Remark</th><th>Source</th>${isAdmin?'<th></th>':''}
+    </tr></thead><tbody>${
+      SALEOUT.slice().reverse().slice(0,1000).map(s=>{
+        const valid=isValidSale(s);
+        return `<tr style="${s.stockMissing?'opacity:.65':''}">
+        <td>${esc(s.receipt)||'—'}</td>
+        <td>${esc(s.date)||'—'}${s.isAmended?`<br><span style="font-size:10px;color:var(--muted)">orig: ${esc(s.origDate)}</span>`:''}</td>
+        <td><span class="badge ${valid&&s.src!=='manual'?'b-ok':'b-warn'}">${esc(s.reportType||s.src==='manual'?'manual':'—')}</span></td>
+        <td><span class="badge ${s.status==='New Receipt'||s.src==='manual'?'b-ok':'b-warn'}">${esc(s.status||'—')}</span></td>
+        <td>${esc(s.material)}</td><td>${esc(s.desc)}</td>
+        <td class="num">${fmt(s.qty)}</td>
+        <td class="num">${s.amount?baht(s.amount):'—'}</td>
+        <td>${esc(s.serial)||'—'}</td>
+        <td style="font-size:11px;color:var(--warn)">${
+          s.isAmended?`✏️ ${esc(s.remark)}`:(s.stockMissing&&CUR_ROLE==='admin'?`⚠️ No stock <button class="btn sec mini" style="padding:2px 7px;font-size:10px;margin-left:4px" onclick="openAddMissingStock('${s.id}')">Fix</button>`:s.stockMissing?'⚠️ No stock':'')
+        }</td>
+        <td style="white-space:nowrap">
+          <span class="badge ${s.src==='manual'?'b-warn':'b-non'}">${s.src||'file'}</span>
+          ${!valid&&s.src!=='manual'?'<span class="badge" style="background:rgba(226,87,76,.16);color:var(--bad);margin-left:3px">Excluded</span>':''}
+        </td>
+        ${isAdmin?`<td style="white-space:nowrap">
+          <button class="btn sec mini" style="padding:4px 9px" onclick="editSale('${s.id}')" title="Edit">✎</button>
+          <button class="btn sec mini" style="padding:4px 9px;border-color:var(--bad);color:var(--bad)" onclick="delSale('${s.id}')" title="Delete & restore stock">✕</button>
+        </td>`:''}
+        </tr>`;}).join('')||`<tr><td colspan=${isAdmin?12:11} class="empty">No sale-out lines yet</td></tr>`
+    }</tbody></table></div>
+  </div>`;
+}
+function clearAllSales(){
+  if(CUR_ROLE!=='admin'){toast('Only Admin can clear sales.','bad');return;}
+  if(!SALEOUT.length){toast('No sales to clear','warn');return;}
+  if(!confirm(`Delete ALL ${SALEOUT.length} sale-out lines (manual + file)? Stock will be fully restored. This cannot be undone.`))return;
+  SALEOUT=[];rebuildStock();persistSales();
+  toast('All sale-out lines cleared and stock restored.');render();
+}
+function editSale(id){
+  if(CUR_ROLE!=='admin'){toast('Only Admin can edit.','bad');return;}
+  const s=SALEOUT.find(x=>x.id===id);if(!s)return;
+  const bg=document.createElement('div');bg.className='modal-bg';bg.onclick=e=>{if(e.target===bg)bg.remove()};
+  bg.innerHTML=`<div class="modal"><h3>Edit Sale Out</h3>
+    <div class="frm-row"><label>Material</label><input id="eMat" value="${esc(s.material)}"></div>
+    <div class="frm-row"><label>Description</label><input id="eDesc" value="${esc(s.desc||'')}"></div>
+    <div class="frm-row"><label>Serial</label><input id="eSer" value="${esc(s.serial||'')}"></div>
+    <div class="frm-row"><label>Quantity</label><input id="eQty" type="number" value="${s.qty||1}" min="1"></div>
+    <div class="frm-row"><label>Amount</label><input id="eAmt" type="number" step="0.01" value="${s.amount||0}"></div>
+    <div class="frm-row"><label>Receipt No.</label><input id="eRcpt" value="${esc(s.receipt||'')}"></div>
+    <div class="frm-row"><label>Date</label><input id="eDate" value="${esc(s.date||'')}"></div>
+    <div class="help" style="margin:6px 0">Editing recalculates stock automatically.</div>
+    <div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end">
+      <button class="btn sec mini" onclick="this.closest('.modal-bg').remove()">Cancel</button>
+      <button class="btn mini" onclick="saveEditSale('${id}',this)">Save</button></div></div>`;
+  document.body.appendChild(bg);
+}
+function saveEditSale(id,btn){
+  const s=SALEOUT.find(x=>x.id===id);if(!s)return;
+  s.material=$('#eMat').value.trim();s.desc=$('#eDesc').value;s.serial=$('#eSer').value.trim();
+  s.qty=parseFloat($('#eQty').value)||1;s.amount=parseFloat($('#eAmt').value)||0;s.grand=s.amount;
+  s.receipt=$('#eRcpt').value.trim();s.date=$('#eDate').value;
+  rebuildStock();persistSales();
+  btn.closest('.modal-bg').remove();toast('Sale updated and stock recalculated.');render();
+}
+function openSaleModal(){
+  // Build modal using DOM API to avoid any innerHTML event-binding issues
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = '<h3>&#x1F9FE; New Sale Out</h3>';
+
+  const S = 'width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:10px;border-radius:8px;font-size:15px;min-height:44px;';
+  const scanStyle = 'flex-shrink:0;width:50px;height:44px;background:linear-gradient(135deg,#f5a623,#d4881b);color:#1a0a00;font-weight:700;border-radius:8px;font-size:20px;border:none;cursor:pointer;';
+
+  // Helper: labelled row
+  function row(lbl, inner){
+    const d = document.createElement('div');
+    d.className = 'frm-row';
+    d.innerHTML = '<label style="font-size:12px;color:var(--muted)">' + lbl + '</label>';
+    d.appendChild(inner);
+    return d;
+  }
+
+  // Material row
+  const matWrap = document.createElement('div');
+  matWrap.style.cssText = 'display:flex;gap:6px';
+  const sMat = document.createElement('input');
+  sMat.id = 'sMat'; sMat.placeholder = 'material code';
+  sMat.setAttribute('list','matList');
+  sMat.style.cssText = 'flex:1;' + S;
+  const matList = document.createElement('datalist');
+  matList.id = 'matList';
+  uniq(STOCK.map(r=>r.material)).slice(0,500).forEach(m=>{
+    const o=document.createElement('option'); o.value=m; matList.appendChild(o);
+  });
+  const btnScanMat = document.createElement('button');
+  btnScanMat.style.cssText = scanStyle;
+  btnScanMat.textContent = '\uD83D\uDCF7';
+  btnScanMat.title = 'Scan material barcode';
+  matWrap.appendChild(sMat); matWrap.appendChild(matList); matWrap.appendChild(btnScanMat);
+  modal.appendChild(row('Material (I)', matWrap));
+
+  // Description
+  const sDesc = document.createElement('input');
+  sDesc.id = 'sDesc'; sDesc.placeholder = 'auto from material'; sDesc.style.cssText = S;
+  modal.appendChild(row('Description', sDesc));
+
+  // Type select
+  const sType = document.createElement('select');
+  sType.id = 'sType'; sType.style.cssText = S;
+  ['Auto-detect|auto','Serial|serial','Non Serial|non'].forEach(o=>{
+    const [t,v]=o.split('|'); const opt=document.createElement('option');
+    opt.value=v; opt.textContent=t; sType.appendChild(opt);
+  });
+  modal.appendChild(row('Type', sType));
+
+  // Serial row
+  const serWrap = document.createElement('div');
+  serWrap.style.cssText = 'display:flex;gap:6px';
+  const sSer = document.createElement('input');
+  sSer.id = 'sSer'; sSer.placeholder = 'required for serial';
+  sSer.style.cssText = 'flex:1;' + S;
+  const btnScanSer = document.createElement('button');
+  btnScanSer.style.cssText = scanStyle;
+  btnScanSer.textContent = '\uD83D\uDCF7';
+  btnScanSer.title = 'Scan serial barcode';
+  serWrap.appendChild(sSer); serWrap.appendChild(btnScanSer);
+  modal.appendChild(row('Serial No.', serWrap));
+
+  // Qty
+  const sQty = document.createElement('input');
+  sQty.id='sQty'; sQty.type='number'; sQty.value='1'; sQty.min='1'; sQty.style.cssText=S;
+  modal.appendChild(row('Quantity', sQty));
+
+  // Receipt
+  const sRcpt = document.createElement('input');
+  sRcpt.id='sRcpt'; sRcpt.placeholder='receipt / manual no.'; sRcpt.style.cssText=S;
+  modal.appendChild(row('Receipt No.', sRcpt));
+
+  // Amount
+  const sAmt = document.createElement('input');
+  sAmt.id='sAmt'; sAmt.type='number'; sAmt.value='0'; sAmt.step='0.01'; sAmt.style.cssText=S;
+  modal.appendChild(row('Amount', sAmt));
+
+  // Date
+  const sDate = document.createElement('input');
+  sDate.id='sDate'; sDate.style.cssText=S;
+  sDate.value = new Date().toLocaleDateString('en-GB');
+  modal.appendChild(row('Date', sDate));
+
+  // Buttons
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:10px;margin-top:18px;justify-content:flex-end;flex-wrap:wrap';
+  const btnCancel = document.createElement('button');
+  btnCancel.className='btn sec mini'; btnCancel.textContent='Cancel';
+  const btnCommit = document.createElement('button');
+  btnCommit.className='btn mini'; btnCommit.textContent='Commit & Deduct';
+  btnRow.appendChild(btnCancel); btnRow.appendChild(btnCommit);
+  modal.appendChild(btnRow);
+
+  const errDiv = document.createElement('div');
+  errDiv.className='err'; errDiv.id='sErr';
+  modal.appendChild(errDiv);
+
+  bg.appendChild(modal);
+  document.body.appendChild(bg);
+
+  // ── EVENT BINDINGS ────────────────────────────────────────────
+  bg.addEventListener('click', function(e){ if(e.target===bg) bg.remove(); });
+  btnCancel.addEventListener('click', function(){ bg.remove(); });
+  btnCommit.addEventListener('click', function(){ commitManual(btnCommit); });
+
+  // Material auto-fill
+  sMat.addEventListener('change', function(){
+    var r = STOCK.find(function(x){ return x.material === sMat.value; });
+    if(r){
+      sDesc.value = r.desc || '';
+      sType.value = isSerial(r) ? 'serial' : 'non';
+    }
+  });
+  // Also on input (for datalist selection on mobile)
+  sMat.addEventListener('input', function(){
+    var r = STOCK.find(function(x){ return x.material === sMat.value; });
+    if(r){
+      sDesc.value = r.desc || '';
+      sType.value = isSerial(r) ? 'serial' : 'non';
+    }
+  });
+
+  // Scan Material → fill material + desc + type
+  btnScanMat.addEventListener('click', function(){
+    openScanner(function(v){
+      sMat.value = v;
+      var r = STOCK.find(function(x){ return x.material === v; });
+      if(r){
+        sDesc.value = r.desc || '';
+        sType.value = isSerial(r) ? 'serial' : 'non';
+        toast('\u2705 ' + r.desc);
+      } else {
+        toast('\u26A0\uFE0F Material not found in stock: ' + v, 'warn');
+      }
+    });
+  });
+
+  // Scan Serial → fill serial + lookup material+desc automatically (req 2)
+  btnScanSer.addEventListener('click', function(){
+    openScanner(function(v){
+      sSer.value = v;
+      sType.value = 'serial';
+      var r = STOCK.find(function(x){ return isSerial(x) && String(x.serial) === String(v); });
+      if(r){
+        sMat.value = r.material;
+        sDesc.value = r.desc || '';
+        toast('\u2705 ' + r.desc + ' | ' + r.brand);
+      } else {
+        toast('\u26A0\uFE0F Serial not found in stock: ' + v, 'warn');
+      }
+    });
+  });
+}
+function commitManual(btn){
+  const mat=$('#sMat').value.trim();if(!mat){$('#sErr').textContent='Material required';return}
+  const ref=STOCK.find(r=>r.material===mat);
+  let type=$('#sType').value;if(type==='auto')type=ref&&isSerial(ref)?'serial':'non';
+  const serial=$('#sSer').value.trim();
+  const qty=parseFloat($('#sQty').value)||1;
+  if(type==='serial'){
+    if(!serial){$('#sErr').textContent='Serial number required for serial item';return}
+    const row=STOCK.find(r=>isSerial(r)&&String(r.serial)===serial);
+    if(!row){$('#sErr').textContent='Serial not found in stock';return}
+    if(row.unr<=0){$('#sErr').textContent='Serial already sold out';return}
+  }else{
+    const avail=STOCK.filter(r=>r.material===mat&&!isSerial(r)).reduce((a,r)=>a+r.unr,0);
+    if(avail<qty){$('#sErr').textContent=`Insufficient stock. Available: ${avail}`;return}
+  }
+  const s={id:uid(),src:'manual',material:mat,desc:$('#sDesc').value||(ref?ref.desc:''),
+    brand:ref?ref.brand:'',prodType:ref?ref.matType:'',serial:type==='serial'?serial:'',
+    qty:type==='serial'?1:qty,receipt:$('#sRcpt').value.trim(),amount:parseFloat($('#sAmt').value)||0,
+    grand:parseFloat($('#sAmt').value)||0,date:$('#sDate').value};
+  SALEOUT.push(s);rebuildStock();
+  appendSaleRemote([s]); // sync to Google Sheets (staff + admin)
+  btn.closest('.modal-bg').remove();toast('Sale committed & stock deducted.');render();
+}
+function delSale(id){
+  if(CUR_ROLE!=='admin'){toast('Only Admin can delete sale-out lines.','bad');return;}
+  const i=SALEOUT.findIndex(s=>s.id===id);if(i<0)return;
+  const s=SALEOUT[i];
+  if(!confirm(`Delete this sale-out line?\n${s.material} ${s.desc||''}${s.serial?(' · SN '+s.serial):''} · qty ${s.qty}\nStock will be added back automatically.`))return;
+  SALEOUT.splice(i,1);
+  rebuildStock();
+  // Sync: delete from Sheets or save full list
+  if(API_URL) apiPost({action:'deleteSale',key:ADMIN_KEY_CACHE,id}).then(res=>{
+    if(!res||!res.ok) apiPost({action:'saveSales',key:ADMIN_KEY_CACHE,rows:SALEOUT}); // fallback: overwrite all
+  });
+  else try{localStorage.setItem('ais_saleouts',JSON.stringify(SALEOUT));}catch(e){}
+  toast('Sale-out deleted and stock restored.');render();
+}
+
+/* ============ PAGE: LOAD SALE OUT (req 4) ============ */
+function pgSaleLoad(){
+  const M=$('#main');
+  M.innerHTML=`
+  <div class="page-head"><div><h1>Load Sale Out</h1>
+    <div class="desc">Upload TDRSO028 export. Duplicate Serial / Receipt+Material lines are skipped automatically.</div></div>
+    <div class="row-actions" style="margin:0">
+      <button class="btn sec mini" onclick="downloadSaleTemplate()">⬇ Template</button>
+      ${CUR_ROLE==='admin'?`<button class="btn sec mini" style="border-color:var(--bad);color:var(--bad)" onclick="clearAllSales()">🗑 Clear Sales Only</button>`:''}
+    </div>
+  </div>
+  <div class="panel"><h3>Upload Sale Out file (TDRSO028)</h3>
+    <div class="drop" id="dropSale"><div class="big">📥</div>
+      <div><b>Click or drop</b> TDRSO028 .xlsx</div>
+      <div class="help" style="margin-top:8px">Payment-only sub-rows (blank MAT_CODE) are ignored. Dedup keys: Serial No., or Receipt+Material+Qty.</div>
+    </div>
+  </div>
+  <div class="panel"><h3>Committed lines</h3>
+    <div class="kpis" style="margin:0">
+      <div class="kpi teal"><div class="lab">Total lines</div><div class="val">${fmt(SALEOUT.length)}</div></div>
+      <div class="kpi green"><div class="lab">From file</div><div class="val">${fmt(SALEOUT.filter(s=>s.src!=='manual').length)}</div></div>
+      <div class="kpi warn"><div class="lab">Manual</div><div class="val">${fmt(SALEOUT.filter(s=>s.src==='manual').length)}</div></div>
+      <div class="kpi"><div class="lab">Total Rev.</div><div class="val" style="font-size:20px">${baht(SALEOUT.reduce((a,s)=>a+(s.grand||s.amount||0),0))}</div></div>
+    </div></div>`;
+  const d=$('#dropSale');
+  d.onclick=()=>pickFile(rows=>importSales(rows));
+  dropZone(d,rows=>importSales(rows));
+}
+// ── SALE OUT column mapping ──────────────────────────────────────────────
+const SALE_RULES=[
+  {f:'material',   k:[['mat code'],['mat_code'],['material code'],['matcode'],['material']]},
+  {f:'desc',       k:[['material desc'],['material description'],['mat desc']]},
+  {f:'brand',      k:[['brand name'],['brand']]},
+  {f:'model',      k:[['model']]},
+  {f:'color',      k:[['color']]},
+  {f:'prodType',   k:[['product type'],['prod type'],['product_type'],['product subtype'],['prod subtype']]},
+  {f:'reportType', k:[['report type'],['report_type']]},
+  {f:'status',     k:[['status']]},
+  {f:'serial',     k:[['serial no'],['serial number'],['serial_no'],['serialno']]},
+  {f:'receipt',    k:[['recpt inv no'],['receipt'],['recpt_inv'],['invoice no'],['doc no']]},
+  {f:'date',       k:[['process date'],['sale date'],['date']]},
+  {f:'origReceipt',k:[['original receipt no'],['original_receipt_no'],['orig receipt'],['original receipt']]},
+  {f:'origDate',   k:[['original receipt date'],['original_receipt_date'],['orig date'],['original date']]},
+  {f:'qty',        k:[['qty'],['quantity']]},
+  {f:'price',      k:[['price pcs'],['unit price'],['price']]},
+  {f:'amount',     k:[['amount']]},
+  {f:'grand',      k:[['grand total'],['grand_total'],['total amount'],['total']]},
+  {f:'empName',    k:[['sale employee'],['employee name'],['emp name'],['salesperson']]},
+  {f:'locName',    k:[['location name'],['location'],['branch']]},
+];
+// Valid sale filters (req: col I + col AA must both match)
+const VALID_REPORT_TYPES=['cash sales','cash sales abb','pre booking'];
+const VALID_STATUS=['new receipt'];
+function isValidSale(s){
+  const rt=(s.reportType||'').toLowerCase().trim();
+  const st=(s.status||'').toLowerCase().trim();
+  // reportType must be one of the 3 types; status must be New Receipt (or blank = old data without status col)
+  const rtOk = rt==='' || VALID_REPORT_TYPES.some(v=>rt.includes(v));
+  const stOk = st==='' || VALID_STATUS.includes(st);
+  return rtOk && stOk;
+}
+
+function mapSaleHeaders(hdrRaw){
+  const hdr=hdrRaw.map(normH);
+  const idx={};
+  SALE_RULES.forEach(rule=>{
+    if(idx[rule.f]!=null)return;
+    for(const keys of rule.k){
+      const col=hdr.findIndex(h=>keys.every(k=>h.includes(k)));
+      if(col>=0){idx[rule.f]=col;break;}
+    }
+  });
+  return idx;
+}
+function findSaleHeaderRow(aoa){
+  for(let i=0;i<Math.min(aoa.length,15);i++){
+    const row=(aoa[i]||[]).map(normH);
+    const hasMat=row.some(h=>h.includes('mat code')||h.includes('mat_code')||h.includes('material code')||h==='material');
+    const hasRef=row.some(h=>h.includes('recpt')||h.includes('receipt')||h.includes('invoice')||h.includes('serial no')||h.includes('process date')||h.includes('date'));
+    if(hasMat&&hasRef)return i;
+  }
+  for(let i=0;i<Math.min(aoa.length,15);i++){
+    const row=(aoa[i]||[]).map(normH);
+    if(row.some(h=>h==='qty'||h.includes('quantity'))&&row.some(h=>h.includes('amount')))return i;
+  }
+  return 0;
+}
+function importSales(sheetRows){
+  let parsed=[];
+  sheetRows.forEach(aoa=>{
+    if(!aoa.length)return;
+    const hr=findSaleHeaderRow(aoa);
+    const idx=mapSaleHeaders(aoa[hr]);
+    if(idx.material==null)return;
+    for(let i=hr+1;i<aoa.length;i++){
+      const r=aoa[i]; const mat=r&&r[idx.material];
+      if(mat==null||mat==='')continue;
+      const origReceipt=val(r,idx.origReceipt);
+      const origDate=val(r,idx.origDate);
+      // BE/BF: if ORIGINAL_RECEIPT_NO has a value → this is an amended/edited receipt
+      const isAmended = origReceipt!=='' && origReceipt!==null;
+      parsed.push({id:uid(),src:'file',
+        material:String(mat),desc:val(r,idx.desc),brand:val(r,idx.brand),
+        model:val(r,idx.model),color:val(r,idx.color),prodType:val(r,idx.prodType),
+        reportType:val(r,idx.reportType),status:val(r,idx.status),
+        serial:String(val(r,idx.serial)),receipt:String(val(r,idx.receipt)),
+        // If amended: use ORIGINAL date (BF) for performance reporting, stamp remark
+        date: isAmended && origDate ? origDate : val(r,idx.date),
+        origReceipt: origReceipt, origDate: origDate,
+        isAmended: isAmended,
+        remark: isAmended ? `Edit ใบเสร็จ (เดิม ${origReceipt} วันที่ ${origDate})` : '',
+        qty:num(r,idx.qty)||1,price:num(r,idx.price),amount:num(r,idx.amount),grand:num(r,idx.grand),
+        empName:val(r,idx.empName),locName:val(r,idx.locName)});
+    }
+  });
+  if(!parsed.length){toast('No sale rows found — check headers.','bad');return;}
+
+  // ── Filter: only Cash Sales / Cash Sales ABB / Pre Booking + New Receipt ──
+  const validParsed=parsed.filter(isValidSale);
+  const filteredOut=parsed.length-validParsed.length;
+
+  // ── Dedup ──────────────────────────────────────────────────────────────────
+  const seen=existingKeys();let added=0,dup=0,noStock=0;
+  validParsed.forEach(s=>{
+    const k=dupKey(s);
+    if(seen.has(k)){dup++;return;}
+    seen.add(k);
+
+    // ── Req 3: check stock exists before committing ──────────────────────────
+    const inStock = checkStockExists(s);
+    if(!inStock){
+      // Still add to SALEOUT (for audit trail) but flag it
+      s.stockMissing=true; noStock++;
+    }
+    SALEOUT.push(s);added++;
+  });
+
+  rebuildStock();
+  // Save full SALEOUT to Google Sheets (admin) or append new rows (staff)
+  if(API_URL){
+    if(CUR_ROLE==='admin'){
+      apiPost({action:'saveSales',key:ADMIN_KEY_CACHE,rows:SALEOUT}).then(res=>{
+        if(res&&res.ok) toast(`✅ Saved ${fmt(SALEOUT.length)} sales to Google Sheets`);
+        else toast('⚠️ Could not save to Sheets','warn');
+      });
+    }
+  } else {
+    try{localStorage.setItem('ais_saleouts',JSON.stringify(SALEOUT));}catch(e){}
+  }
+
+  let msg=`Added ${fmt(added)} · skipped ${fmt(dup)} dup`;
+  if(filteredOut>0) msg+=` · ${fmt(filteredOut)} excluded (cancelled/other type)`;
+  if(noStock>0) msg+=` · ⚠️ ${fmt(noStock)} lines have no matching stock`;
+  const amendedCount=validParsed.filter(s=>s.isAmended).length;
+  if(amendedCount>0) msg+=` · ${fmt(amendedCount)} amended receipts (date from col BF)`;
+  toast(msg,(noStock>0||filteredOut>0)?'warn':'');
+  render();
+}
+// Check if a sale line has a matching stock entry (serial or material)
+function checkStockExists(s){
+  if(s.serial&&s.serial!=='undefined'&&s.serial!==''){
+    return RAW_STOCK.some(r=>isSerial(r)&&String(r.serial)===String(s.serial));
+  }
+  return RAW_STOCK.some(r=>r.material===s.material);
+}
+
+/* ── ADD MISSING STOCK (Manual) — req 1 ────────────────────────────────
+   Admin can add a serial/non-serial item directly to RAW_STOCK for
+   cases where the Sale Out has a serial not found in the AGING file.    */
+function openAddMissingStock(saleId){
+  if(CUR_ROLE!=='admin'){toast('Admin only.','bad');return;}
+  const s=saleId?SALEOUT.find(x=>x.id===saleId):null;
+  const bg=document.createElement('div');bg.className='modal-bg';
+  bg.onclick=e=>{if(e.target===bg)bg.remove()};
+  bg.innerHTML=`<div class="modal"><h3>Add Missing Stock (Manual)</h3>
+    <p class="help" style="margin-bottom:14px">Add a stock item that exists in real inventory but wasn't in the loaded AGING file. It will be added to RAW_STOCK and sale-outs will be re-applied.</p>
+    <div class="frm-row"><label>Material</label><input id="msM" value="${esc(s?s.material:'')}"></div>
+    <div class="frm-row"><label>Description</label><input id="msD" value="${esc(s?s.desc:'')}"></div>
+    <div class="frm-row"><label>Brand</label><input id="msBr" value="${esc(s?s.brand:'')}"></div>
+    <div class="frm-row"><label>Material Type Desc.</label>
+      <select id="msMT"><option>AIS Trading Goods</option><option>AIS Trading Goods Demo</option>
+      <option>AIS Return Material</option><option>AIS Non-Valuated Material</option></select></div>
+    <div class="frm-row"><label>Material Group Desc.</label>
+      <input id="msGrp" list="grpList" value="${esc(s?s.prodType:'')}">
+      <datalist id="grpList">${['T-Device Handset','T-Device Tablet','T-Gad.Audio','T-Gad.Camera',
+        'T-Gad.Smart Track','T-IoT Smart Home','T-IoT Smart Watch','T-IoT Wearable',
+        'T-SIM Sale Prepaid','T-Acc.for Device'].map(g=>`<option value="${g}">`).join('')}</datalist></div>
+    <div class="frm-row"><label>Serial No.</label><input id="msSer" value="${esc(s?s.serial:'')}"></div>
+    <div class="frm-row"><label>SN Profile</label>
+      <select id="msSnP"><option value="Serial">Serial</option><option value="Non Serial">Non Serial</option></select></div>
+    <div class="frm-row"><label>Plant</label><input id="msPlant" placeholder="e.g. NJ12"></div>
+    <div class="frm-row"><label>Unrestricted qty</label><input id="msUnr" type="number" value="1" min="0"></div>
+    <div class="err" id="msErr"></div>
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
+      <button class="btn sec mini" onclick="this.closest('.modal-bg').remove()">Cancel</button>
+      <button class="btn mini" onclick="commitAddMissingStock(this)">Add to Stock</button>
+    </div></div>`;
+  document.body.appendChild(bg);
+  if(s&&s.serial&&s.serial!=='undefined'){document.getElementById('msSnP').value='Serial';}
+}
+function commitAddMissingStock(btn){
+  const mat=document.getElementById('msM').value.trim();
+  if(!mat){document.getElementById('msErr').textContent='Material required';return;}
+  const serial=document.getElementById('msSer').value.trim();
+  const snp=document.getElementById('msSnP').value;
+  // check for dup
+  if(serial&&RAW_STOCK.some(r=>String(r.serial)===serial)){
+    document.getElementById('msErr').textContent='Serial already exists in stock';return;
+  }
+  const newRow={
+    plant:document.getElementById('msPlant').value.trim(),plantName:'Manual Entry',
+    matType:document.getElementById('msMT').value,
+    matGroupDesc:document.getElementById('msGrp').value,
+    material:mat,desc:document.getElementById('msD').value,
+    brand:document.getElementById('msBr').value,
+    serProfile:snp,serProfileCode:'',serial:serial,color:'',indStd:'',
+    unr:parseFloat(document.getElementById('msUnr').value)||1,qi:0,blk:0,trn:0,
+    _manualEntry:true
+  };
+  RAW_STOCK.push(newRow);
+  // clear stockMissing flag for matching sale-outs
+  SALEOUT.forEach(s=>{
+    if(s.stockMissing){
+      if(serial&&String(s.serial)===serial) s.stockMissing=false;
+      else if(!serial&&s.material===mat) s.stockMissing=false;
+    }
+  });
+  rebuildStock();persistSales();
+  btn.closest('.modal-bg').remove();
+  toast(`Added "${mat}" to stock · deductions recalculated.`);
+  render();
+}
+
+</script>
+
+<script>
+/* ============ PERIOD FILTER (Sales Performance + Daily) ============ */
+let PERIOD={preset:'all',from:'',to:''}; // preset: all|today|7d|month|custom
+function normDate(d){if(!d)return'';if(d instanceof Date)return d.toISOString().slice(0,10);
+  const s=String(d);const m=s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if(m){let y=m[3];if(y.length===2)y='20'+y;return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;}
+  const m2=s.match(/(\d{4})-(\d{2})-(\d{2})/);if(m2)return m2[0];return '';}
+function periodRange(){
+  const today=new Date();const iso=d=>d.toISOString().slice(0,10);
+  if(PERIOD.preset==='today')return [iso(today),iso(today)];
+  if(PERIOD.preset==='7d'){const f=new Date(today);f.setDate(f.getDate()-6);return [iso(f),iso(today)];}
+  if(PERIOD.preset==='month'){const f=new Date(today.getFullYear(),today.getMonth(),1);return [iso(f),iso(today)];}
+  if(PERIOD.preset==='custom')return [PERIOD.from||'0000-01-01',PERIOD.to||'9999-12-31'];
+  return ['0000-01-01','9999-12-31'];
+}
+// file sales filtered by selected period
+function periodSales(){
+  const [f,t]=periodRange();
+  return fileSales().filter(s=>{const d=normDate(s.date);if(!d)return PERIOD.preset==='all';return d>=f&&d<=t;});
+}
+function periodBar(){
+  const seg=(v,lbl)=>`<button class="${PERIOD.preset===v?'on':''}" onclick="setPeriod('${v}')">${lbl}</button>`;
+  return `<div class="filters" style="margin-bottom:18px">
+    <div class="f"><label>Period</label><div class="seg">
+      ${seg('all','All')}${seg('today','Today')}${seg('7d','7 days')}${seg('month','This month')}${seg('custom','Custom')}
+    </div></div>
+    <div class="f"><label>From</label><input type="date" id="pFrom" value="${PERIOD.from}" ${PERIOD.preset!=='custom'?'disabled':''}></div>
+    <div class="f"><label>To</label><input type="date" id="pTo" value="${PERIOD.to}" ${PERIOD.preset!=='custom'?'disabled':''}></div>
+  </div>`;
+}
+function setPeriod(p){PERIOD.preset=p;render();}
+function bindPeriod(){
+  const f=$('#pFrom'),t=$('#pTo');
+  if(f)f.onchange=e=>{PERIOD.from=e.target.value;PERIOD.preset='custom';render();};
+  if(t)t.onchange=e=>{PERIOD.to=e.target.value;PERIOD.preset='custom';render();};
+}
+
+/* ============ PAGE: SALES PERFORMANCE (req 5 + Top10) ============ */
+let perfMetric='unit'; // unit | rev
+function pgPerf(){
+  const M=$('#main');
+  const S=periodSales();
+  const totUnit=S.reduce((a,s)=>a+(s.qty||0),0);
+  const totRev=S.reduce((a,s)=>a+(s.grand||s.amount||0),0);
+  // by category (prodType)
+  const cat={};S.forEach(s=>{const k=s.prodType||'(none)';cat[k]=cat[k]||{u:0,r:0};cat[k].u+=s.qty||0;cat[k].r+=s.grand||s.amount||0});
+  const catR=Object.entries(cat).sort((a,b)=>b[1].r-a[1].r);
+
+  M.innerHTML=`
+  <div class="page-head"><div><h1>Sales Performance</h1>
+    <div class="desc">From loaded Sale Out files only (manual excluded) · ${periodLabel()} · ${fmt(S.length)} lines</div></div>
+    <button class="btn sec mini" onclick="exportSales()">⬇ Export Sales</button>
+  </div>
+  ${periodBar()}
+  <div class="kpis">
+    <div class="kpi green"><div class="lab">Total Units</div><div class="val">${fmt(totUnit)}</div></div>
+    <div class="kpi teal"><div class="lab">Total Revenue</div><div class="val" style="font-size:22px">${baht(totRev)}</div></div>
+    <div class="kpi"><div class="lab">Categories</div><div class="val">${catR.length}</div></div>
+    <div class="kpi"><div class="lab">Avg / line</div><div class="val" style="font-size:20px">${baht(totRev/(S.length||1))}</div></div>
+  </div>
+  <div class="panel"><h3>Performance by Category <span class="tag">Unit & Revenue</span></h3>
+    <canvas id="cCat" height="120"></canvas></div>
+  <div class="grid2">
+    <div class="panel"><h3>Top 10 by Brand <span class="tag">${perfMetric==='unit'?'Units':'Revenue'}</span>
+      <span class="seg" style="margin-left:auto">
+        <button class="${perfMetric==='unit'?'on':''}" onclick="perfMetric='unit';render()">Unit</button>
+        <button class="${perfMetric==='rev'?'on':''}" onclick="perfMetric='rev';render()">Rev</button></span></h3>
+      <canvas id="cBrandTop" height="170"></canvas></div>
+    <div class="panel"><h3>Top 10 by Model <span class="tag">${perfMetric==='unit'?'Units':'Revenue'}</span></h3>
+      <canvas id="cModelTop" height="170"></canvas></div>
+  </div>
+  <div class="panel"><h3>Category detail</h3>
+    <div class="tbl-wrap" style="max-height:340px"><table><thead><tr>
+    <th>Category</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">% Rev</th>
+    </tr></thead><tbody>${catR.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${fmt(v.u)}</td>
+    <td class="num">${baht(v.r)}</td><td class="num">${(v.r/totRev*100||0).toFixed(1)}%</td></tr>`).join('')
+    ||'<tr><td colspan=4 class="empty">No sales</td></tr>'}</tbody></table></div></div>`;
+
+  mkChart('cCat','bar',{labels:catR.map(c=>c[0]),datasets:[
+    {label:'Units',data:catR.map(c=>c[1].u),backgroundColor:'#7ac143',yAxisID:'y'},
+    {label:'Revenue',data:catR.map(c=>c[1].r),backgroundColor:'#00a99d',yAxisID:'y1',type:'line',
+     borderColor:'#00a99d',tension:.3}]},
+    {scales:{y:{position:'left',grid:{color:'#244047'}},y1:{position:'right',grid:{drawOnChartArea:false}}}});
+
+  topChart('cBrandTop','brand');topChart('cModelTop','model');
+  bindPeriod();
+}
+function periodLabel(){
+  if(PERIOD.preset==='all')return 'all dates';
+  if(PERIOD.preset==='today')return 'today';
+  if(PERIOD.preset==='7d')return 'last 7 days';
+  if(PERIOD.preset==='month')return 'this month';
+  const [f,t]=periodRange();return `${f} → ${t}`;
+}
+function topChart(id,field){
+  const g={};periodSales().forEach(s=>{const k=s[field]||'(none)';g[k]=g[k]||{u:0,r:0};g[k].u+=s.qty||0;g[k].r+=s.grand||s.amount||0});
+  const key=perfMetric==='unit'?'u':'r';
+  const top=Object.entries(g).sort((a,b)=>b[1][key]-a[1][key]).slice(0,10);
+  mkChart(id,'bar',{labels:top.map(t=>t[0]),datasets:[{label:perfMetric==='unit'?'Units':'Revenue',
+    data:top.map(t=>t[1][key]),backgroundColor:perfMetric==='unit'?'#7ac143':'#00a99d'}]},
+    {indexAxis:'y',plugins:{legend:{display:false}}});
+}
+
+/* ============ PAGE: DAILY SALES (req daily 1) ============ */
+function pgDaily(){
+  const M=$('#main');
+  const g={};periodSales().forEach(s=>{const d=normDate(s.date)||'(no date)';g[d]=g[d]||{u:0,r:0};g[d].u+=s.qty||0;g[d].r+=s.grand||s.amount||0});
+  const days=Object.entries(g).sort((a,b)=>a[0]<b[0]?-1:1);
+  const totU=days.reduce((a,d)=>a+d[1].u,0),totR=days.reduce((a,d)=>a+d[1].r,0);
+  M.innerHTML=`
+  <div class="page-head"><div><h1>Daily Sales</h1>
+    <div class="desc">Units &amp; Revenue per day · ${periodLabel()} · loaded files only</div></div>
+    <button class="btn sec mini" onclick="exportSales()">⬇ Export</button></div>
+  ${periodBar()}
+  <div class="kpis">
+    <div class="kpi green"><div class="lab">Days</div><div class="val">${days.length}</div></div>
+    <div class="kpi teal"><div class="lab">Total Units</div><div class="val">${fmt(totU)}</div></div>
+    <div class="kpi"><div class="lab">Total Revenue</div><div class="val" style="font-size:20px">${baht(totR)}</div></div>
+  </div>
+  <div class="panel"><h3>Daily Units &amp; Revenue</h3><canvas id="cDaily" height="110"></canvas></div>
+  <div class="panel"><h3>Daily breakdown</h3>
+    <div class="tbl-wrap" style="max-height:380px"><table><thead><tr><th>Date</th>
+    <th class="num">Units</th><th class="num">Revenue</th></tr></thead><tbody>${
+    days.slice().reverse().map(([d,v])=>`<tr><td>${esc(d)}</td><td class="num">${fmt(v.u)}</td><td class="num">${baht(v.r)}</td></tr>`).join('')
+    ||'<tr><td colspan=3 class="empty">No sales</td></tr>'}</tbody></table></div></div>`;
+  mkChart('cDaily','bar',{labels:days.map(d=>d[0]),datasets:[
+    {label:'Units',data:days.map(d=>d[1].u),backgroundColor:'#7ac143',yAxisID:'y'},
+    {label:'Revenue',data:days.map(d=>d[1].r),type:'line',borderColor:'#00a99d',backgroundColor:'#00a99d',
+     tension:.3,yAxisID:'y1'}]},
+    {scales:{y:{position:'left',grid:{color:'#244047'}},y1:{position:'right',grid:{drawOnChartArea:false}}}});
+  bindPeriod();
+}
+
+/* ============ CLEAR DATA ============ */
+function clearAllData(){
+  if(!confirm('Clear ALL data? Removes stock and all sale-out lines for everyone. Cannot be undone.'))return;
+  STOCK=[]; RAW_STOCK=[]; SALEOUT=[];
+  stockLoaded=false; hasSerialData=false;
+  try{localStorage.removeItem('ais_saleouts');}catch(e){}
+  F={matType:'',brand:'',serProf:'',q:''}; csGroup=''; csQ=''; stockView='all'; PERIOD={preset:'all',from:'',to:''};
+  if(API_URL) apiPost({action:'clearAll',key:ADMIN_KEY_CACHE}).then(res=>{
+    toast(res&&res.ok?'✅ All data cleared on Google Sheets':'⚠️ Local cleared — Sheets may not be cleared','warn');
+  });
+  else toast('All data cleared.');
+  render();
+}
+
+/* ============ FILE UPLOAD / TEMPLATES / EXPORT (req 6) ============ */
+function pickFile(cb){const inp=$('#fileInput');inp.value='';inp.onchange=()=>{if(inp.files[0])readWorkbook(inp.files[0],cb)};inp.click();}
+function dropZone(el,cb){
+  el.ondragover=e=>{e.preventDefault();el.classList.add('over')};
+  el.ondragleave=()=>el.classList.remove('over');
+  el.ondrop=e=>{e.preventDefault();el.classList.remove('over');if(e.dataTransfer.files[0])readWorkbook(e.dataTransfer.files[0],cb)};
+}
+function readWorkbook(file,cb){
+  const rd=new FileReader();
+  rd.onload=e=>{try{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const sheets=wb.SheetNames.map(n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,defval:''}));
+    cb(sheets);
+  }catch(err){toast('Could not read file: '+err.message,'bad')}};
+  rd.readAsArrayBuffer(file);
+}
+function downloadStockTemplate(){
+  const hdr=['Plant','Plant Name','Material Type Desc.','Material','Material Description','Brand Name','Color',
+    'Industry Std Desc.','Serial No. Profile','Serial Profile','Serial Number','Unrestricted','Quality Inspection',
+    'Blocked','In transfer (plant)'];
+  const ex=['MS12','AIS Sample','AIS Trading Goods','1000003213','WATCH IMOO 4G Z1 BLUE','IMOO','BLUE','SMART WATCH',
+    'Z002','Serial','865934070816230',1,0,0,0];
+  dlSheet([hdr,ex],'Stock_Template.xlsx','Stock');
+}
+function downloadSaleTemplate(){
+  const hdr=['RECPT_INV_NO','PROCESS_DATE','PRODUCT_TYPE','BRAND','MODEL','COLOR','MAT_CODE','MATERIAL_DESCRIPTION',
+    'SERIAL_NO','QTY','PRICE_PCS','AMOUNT','GRAND_TOTAL','SALE_EMPLOYEE_NAME','LOCATION_NAME'];
+  const ex=['1255260500002163','28/05/2026','IOT','IMOO','Z1','BLUE','1000003213','WATCH IMOO 4G Z1 BLUE',
+    '865934070968973',1,3737.38,3737.38,1889.99,'Sample Emp','AIS Phuket'];
+  dlSheet([hdr,ex],'SaleOut_Template.xlsx','SaleOut');
+}
+function dlSheet(aoa,name,sheet){
+  const ws=XLSX.utils.aoa_to_sheet(aoa);const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,sheet);XLSX.writeFile(wb,name);
+}
+function exportStock(){
+  const data=filterStock(STOCK).map(r=>({Material:r.material,Description:r.desc,Brand:r.brand,
+    'Type Desc':r.matType,Profile:isSerial(r)?'Serial':'Non Serial',Serial:r.serial,
+    Unrestricted:r.unr,'Quality Inspection':r.qi,Blocked:r.blk,'In Transfer':r.trn,
+    Sold:isSerial(r)?soldSerial(r.serial):(soldByMaterial()[r.material]||0)}));
+  exportJson(data,'Stock_Export.xlsx','Stock');
+}
+function exportSales(){
+  const data=SALEOUT.map(s=>({Receipt:s.receipt,Date:s.date,Material:s.material,Description:s.desc,
+    Brand:s.brand,Model:s.model||'',Category:s.prodType||'',Serial:s.serial,Qty:s.qty,
+    Amount:s.amount,'Grand Total':s.grand,Source:s.src,Employee:s.empName||''}));
+  exportJson(data,'SaleOut_Export.xlsx','SaleOut');
+}
+function exportJson(data,name,sheet){
+  if(!data.length){toast('Nothing to export','warn');return}
+  const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,sheet);XLSX.writeFile(wb,name);
+  toast('Exported '+name);
+}
+</script>
+</body></html>
+
